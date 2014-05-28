@@ -30,6 +30,7 @@ type Mount struct {
 	Destination string `json:"destination,omitempty"` // Destination path, in the container
 	Writable    bool   `json:"writable,omitempty"`
 	Private     bool   `json:"private,omitempty"`
+	CopyContent bool   `json:"copycontent,omitempty"` // Copy original content into tmpfs (for tmpfs mounts)
 }
 
 // namespaceList is used to convert the libcontainer types
