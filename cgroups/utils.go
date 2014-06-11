@@ -166,3 +166,18 @@ func parseCgroupFile(subsystem string, r io.Reader) (string, error) {
 	}
 	return "", ErrNotFound
 }
+
+func GetContainerPath(cgroupHierarchy string, parent string, name string) (string, error) {
+	mountpoint, err := FindCgroupMountpoint(cgroupHierarchy)
+	if err != nil {
+		return "", err
+	}
+
+	initPath, err := GetInitCgroupDir(cgroupHierarchy)
+	if err != nil {
+		return "", err
+	}
+
+	dir := filepath.Join(mountpoint, initPath, parent, name)
+	return dir, nil
+}
