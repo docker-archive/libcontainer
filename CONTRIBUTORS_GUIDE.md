@@ -117,7 +117,7 @@ component affected. For example, if a change affects `netlink/` and `security/`,
 needs at least one LGTM from the maintainers of `netlink/` AND, separately, at
 least one LGTM from the maintainers of `security/`.
 
-For more details see [MAINTAINERS.md](hack/MAINTAINERS.md)
+For more details see [MAINTAINERS.md](MAINTAINERS.md)
 
 ### Sign your work
 
