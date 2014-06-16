@@ -57,6 +57,18 @@ type Config struct {
 	// placed on the container's processes
 	// TODO(vishh): Avoid overloading this field with params for different subsystems. Strongtype this.
 	Context map[string]string `json:"context,omitempty"`
+
+	// UserNsUid specifies the uid to run as when user namespace mappings are specified
+	UserNsUid uint32 `json:"user_ns_uid,omitempty"`
+
+	// UserNsGid specifies the gid to run as when user namespace mappings are specified
+	UserNsGid uint32 `json:"user_ns_gid,omitempty"`
+
+	// UidMappings is a string array of uid mappings for user namespaces
+	UidMappings []IdMap `json:"uid_mappings,omitempty"`
+
+	// GidMappings is a string array of gid mappings for user namespaces
+	GidMappings []IdMap `json:"gid_mappings,omitempty"`
 }
 
 // Routes can be specified to create entries in the route table as the container is started
@@ -78,4 +90,11 @@ type Route struct {
 
 	// The device to set this route up for, for example: eth0
 	InterfaceName string `json:"interface_name,omitempty"`
+}
+
+// This represents a UidMapping/GidMapping for User Namespaces.
+type IdMap struct {
+	HostId      uint32 `json:"host_id,omitempty"`
+	ContainerId uint32 `json:"container_id,omitempty"`
+	Size        uint32 `json:"size,omitempty"`
 }
