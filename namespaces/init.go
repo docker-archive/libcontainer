@@ -25,7 +25,13 @@ import (
 
 // Init is the init process that first runs inside a new namespace to setup mounts, users, networking,
 // and other options required for the new container.
-func Init(container *libcontainer.Container, uncleanRootfs, consolePath string, syncPipe *SyncPipe, args []string) error {
+func Init(container *libcontainer.Container, uncleanRootfs, consolePath string, syncPipe *SyncPipe, args []string) (err error) {
+	defer func() {
+		if err != nil {
+			syncPipe.ReportError(err)
+		}
+	}()
+
 	rootfs, err := utils.ResolveRootfs(uncleanRootfs)
 	if err != nil {
 		return err
@@ -40,10 +46,8 @@ func Init(container *libcontainer.Container, uncleanRootfs, consolePath string, 
 	// We always read this as it is a way to sync with the parent as well
 	context, err := syncPipe.ReadFromParent()
 	if err != nil {
-		syncPipe.Close()
 		return err
 	}
-	syncPipe.Close()
 
 	if consolePath != "" {
 		if err := console.OpenAndDup(consolePath); err != nil {
