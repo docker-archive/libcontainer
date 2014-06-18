@@ -63,6 +63,46 @@ int nsenter_mknod(char *mount_ns_file, char *mknod_file, unsigned long long mode
 	return 0;
 }
 
+int nsenter_unlink(char *mount_ns_file, char *file_name) {
+
+        if (mount_ns_file == NULL || file_name == NULL) {
+                fprintf(stderr, "nsenter_unlink: Incorrect argument.");
+                return 1;
+        }
+
+        int child = fork();
+        if (child == 0) {
+
+                int fd = open(mount_ns_file, O_RDONLY);
+                if (fd == -1) {
+                        fprintf(stderr, "nsenter_unlink: Failed to open ns file \"%s\" with error: \"%s\"\n", mount_ns_file, strerror(errno));
+                        return 1;
+                }
+
+                // Set the namespace.
+                if (setns(fd, 0) == -1) {
+                        fprintf(stderr, "nsenter_unlink: Failed to setns for \"%s\" with error: \"%s\"\n", mount_ns_file, strerror(errno));
+                        return 1;
+                }
+                close(fd);
+
+                if (unlink(file_name) == -1) {
+                        fprintf(stderr, "nsenter_unlink \"%s\" with error: \"%s\"\n", file_name, strerror(errno));
+                        return 1;
+                }
+		exit(0);
+	} else {
+		// Parent, wait for the child.
+		int status = 0;
+
+		if (waitpid(child, &status, 0) == -1) {
+			fprintf(stderr, "nsenter: Failed to waitpid with error: \"%s\"\n", strerror(errno));
+			exit(1);
+		}
+	}
+
+	return 0;
+}
 */
 import "C"
 import "fmt"
@@ -78,6 +118,20 @@ func NsEnterMknod(mount_file string, mknod_file string, mode uint64, major uint,
 
 	if err > 0 {
 		return fmt.Errorf("Error creating node in container (check stderr)")
+	}
+
+	return nil
+}
+
+func NsEnterUnlink(mount_file string, file_name string) error {
+	mount_file_c := C.CString(mount_file)
+	file_name_c := C.CString(file_name)
+	err := C.nsenter_unlink(mount_file_c, file_name_c)
+	C.free(unsafe.Pointer(mount_file_c))
+	C.free(unsafe.Pointer(file_name_c))
+
+	if err > 0 {
+		return fmt.Errorf("Error removing device from container (check stderr)")
 	}
 
 	return nil
