@@ -12,21 +12,21 @@ import (
 
 var (
 	subsystems = map[string]subsystem{
-		"devices":    &devicesGroup{},
-		"memory":     &memoryGroup{},
-		"cpu":        &cpuGroup{},
-		"cpuset":     &cpusetGroup{},
-		"cpuacct":    &cpuacctGroup{},
-		"blkio":      &blkioGroup{},
-		"perf_event": &perfEventGroup{},
-		"freezer":    &freezerGroup{},
+		"devices":    &DevicesGroup{},
+		"memory":     &MemoryGroup{},
+		"cpu":        &CpuGroup{},
+		"cpuset":     &CpusetGroup{},
+		"cpuacct":    &CpuacctGroup{},
+		"blkio":      &BlkioGroup{},
+		"perf_event": &PerfEventGroup{},
+		"freezer":    &FreezerGroup{},
 	}
 )
 
 type subsystem interface {
 	Set(*data) error
 	Remove(*data) error
-	GetStats(*data, *cgroups.Stats) error
+	GetStats(string, *cgroups.Stats) error
 }
 
 type data struct {
@@ -60,8 +60,12 @@ func GetStats(c *cgroups.Cgroup) (*cgroups.Stats, error) {
 		return nil, err
 	}
 
-	for _, sys := range subsystems {
-		if err := sys.GetStats(d, stats); err != nil {
+	for sysname, sys := range subsystems {
+		path, err := d.path(sysname)
+		if err != nil {
+			return nil, err
+		}
+		if err := sys.GetStats(path, stats); err != nil {
 			return nil, err
 		}
 	}
