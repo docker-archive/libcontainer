@@ -15,6 +15,7 @@ import (
 
 	systemd1 "github.com/coreos/go-systemd/dbus"
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/cgroups/fs"
 	"github.com/dotcloud/docker/pkg/systemd"
 	"github.com/godbus/dbus"
 )
@@ -316,7 +317,7 @@ func (c *systemdCgroup) Cleanup() error {
 }
 
 func joinFreezer(c *cgroups.Cgroup, pid int) (string, error) {
-	path, err := getFreezerPath(c)
+	path, err := getSubsystemPath(c, "freezer")
 	if err != nil {
 		return "", err
 	}
@@ -332,23 +333,27 @@ func joinFreezer(c *cgroups.Cgroup, pid int) (string, error) {
 	return path, nil
 }
 
-func getFreezerPath(c *cgroups.Cgroup) (string, error) {
-	mountpoint, err := cgroups.FindCgroupMountpoint("freezer")
+func getSubsystemPath(c *cgroups.Cgroup, subsystem string) (string, error) {
+	mountpoint, err := cgroups.FindCgroupMountpoint(subsystem)
 	if err != nil {
 		return "", err
 	}
 
-	initPath, err := cgroups.GetInitCgroupDir("freezer")
+	initPath, err := cgroups.GetInitCgroupDir(subsystem)
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(mountpoint, initPath, fmt.Sprintf("%s-%s", c.Parent, c.Name)), nil
+	slice := "system.slice"
+	if c.Slice != "" {
+		slice = c.Slice
+	}
 
+	return filepath.Join(mountpoint, initPath, slice, getUnitName(c)), nil
 }
 
 func Freeze(c *cgroups.Cgroup, state cgroups.FreezerState) error {
-	path, err := getFreezerPath(c)
+	path, err := getSubsystemPath(c, "freezer")
 	if err != nil {
 		return err
 	}
@@ -388,4 +393,55 @@ func GetPids(c *cgroups.Cgroup) ([]int, error) {
 
 func getUnitName(c *cgroups.Cgroup) string {
 	return fmt.Sprintf("%s-%s.scope", c.Parent, c.Name)
+}
+
+/*
+ * This would be nicer to get from the systemd API when accounting
+ * is enabled, but sadly there is no way to do that yet.
+ * The lack of this functionality in the API & the approach taken
+ * is guided by
+ * http://www.freedesktop.org/wiki/Software/systemd/ControlGroupInterface/#readingaccountinginformation.
+ */
+func GetStats(c *cgroups.Cgroup) (*cgroups.Stats, error) {
+	var subsystemPath string
+	var err error
+
+	stats := cgroups.NewStats()
+
+	if subsystemPath, err = getSubsystemPath(c, "cpu"); err != nil {
+		return nil, err
+	}
+	if err := fs.GetCpuStats(subsystemPath, stats); err != nil {
+		return nil, err
+	}
+
+	if subsystemPath, err = getSubsystemPath(c, "cpuacct"); err != nil {
+		return nil, err
+	}
+	if err := fs.GetCpuAcctStats(subsystemPath, stats); err != nil {
+		return nil, err
+	}
+
+	if subsystemPath, err = getSubsystemPath(c, "memory"); err != nil {
+		return nil, err
+	}
+	if err := fs.GetMemoryStats(subsystemPath, stats); err != nil {
+		return nil, err
+	}
+
+	if subsystemPath, err = getSubsystemPath(c, "blkio"); err != nil {
+		return nil, err
+	}
+	if err := fs.GetBlkioStats(subsystemPath, stats); err != nil {
+		return nil, err
+	}
+
+	if subsystemPath, err = getSubsystemPath(c, "freezer"); err != nil {
+		return nil, err
+	}
+	if err := fs.GetFreezerStats(subsystemPath, stats); err != nil {
+		return nil, err
+	}
+
+	return stats, nil
 }

@@ -111,12 +111,17 @@ func getBlkioStat(path string) ([]cgroups.BlkioStatEntry, error) {
 }
 
 func (s *blkioGroup) GetStats(d *data, stats *cgroups.Stats) error {
-	var blkioStats []cgroups.BlkioStatEntry
-	var err error
 	path, err := d.path("blkio")
 	if err != nil {
 		return err
 	}
+
+	return GetBlkioStats(path, stats)
+}
+
+func GetBlkioStats(path string, stats *cgroups.Stats) error {
+	var blkioStats []cgroups.BlkioStatEntry
+	var err error
 
 	if blkioStats, err = getBlkioStat(filepath.Join(path, "blkio.sectors_recursive")); err != nil {
 		return err
