@@ -30,6 +30,7 @@ func Exec(container *libcontainer.Container, term Terminal, rootfs, dataPath str
 	if err != nil {
 		return -1, err
 	}
+	defer syncPipe.Close()
 
 	if container.Tty {
 		master, console, err = system.CreateMasterAndConsole()
@@ -49,6 +50,9 @@ func Exec(container *libcontainer.Container, term Terminal, rootfs, dataPath str
 	if err := command.Start(); err != nil {
 		return -1, err
 	}
+
+	// Now we passed the pipe to the child, close our side
+	syncPipe.CloseChild()
 
 	started, err := system.GetProcessStartTime(command.Process.Pid)
 	if err != nil {
@@ -80,7 +84,9 @@ func Exec(container *libcontainer.Container, term Terminal, rootfs, dataPath str
 	}
 
 	// Sync with child
-	syncPipe.Close()
+	if err := syncPipe.BlockOnChild(); err != nil {
+		return -1, err
+	}
 
 	if startCallback != nil {
 		startCallback()
