@@ -4,6 +4,7 @@ package mount
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -50,6 +51,9 @@ func InitializeMountNamespace(rootfs, console string, container *libcontainer.Co
 	}
 	if err := nodes.CreateDeviceNodes(rootfs, container.DeviceNodes); err != nil {
 		return fmt.Errorf("create device nodes %s", err)
+	}
+	if err := setupTmpfsMounts(rootfs, container); err != nil {
+		return fmt.Errorf("tmpfs mounts %s", err)
 	}
 	if err := SetupPtmx(rootfs, console, container.Context["mount_label"]); err != nil {
 		return err
@@ -181,6 +185,52 @@ func setupBindmounts(rootfs string, bindMounts libcontainer.Mounts) error {
 			if err := system.Mount("", dest, "none", uintptr(syscall.MS_PRIVATE), ""); err != nil {
 				return fmt.Errorf("mounting %s private %s", dest, err)
 			}
+		}
+	}
+	return nil
+}
+
+func setupTmpfsMounts(rootfs string, container *libcontainer.Container) error {
+	for _, m := range container.Mounts.OfType("tmpfs") {
+		var (
+			dest = filepath.Join(rootfs, m.Destination)
+		)
+		dest, err := symlink.FollowSymlinkInScope(dest, rootfs)
+		if err != nil {
+			return err
+		}
+
+		if err := createIfNotExists(dest, true); err != nil {
+			return fmt.Errorf("creating new tmpfs target, %s", err)
+		}
+
+		mountLabel := label.FormatMountLabel("", container.Context["mount_label"])
+
+		if m.CopyContent {
+			tmpdir, err := ioutil.TempDir("", "DockerTmpfs")
+			if err != nil {
+				return err
+			}
+			defer os.Remove(tmpdir)
+
+			if err := system.Mount("tmpfs", tmpdir, "tmpfs", uintptr(defaultMountFlags), mountLabel); err != nil {
+				return fmt.Errorf("mounting %s into %s %s", m.Source, dest, err)
+			}
+
+			if err := copyDir(dest, tmpdir); err != nil {
+				system.Unmount(tmpdir, 0)
+				return err
+			}
+
+			if err := system.Mount(tmpdir, dest, "", syscall.MS_MOVE, ""); err != nil {
+				system.Unmount(tmpdir, 0)
+				return fmt.Errorf("can't move tmpfs mount to %s: %s", dest, err)
+			}
+		} else {
+			if err := system.Mount("tmpfs", dest, "tmpfs", uintptr(defaultMountFlags), mountLabel); err != nil {
+				return fmt.Errorf("mounting %s into %s %s", m.Source, dest, err)
+			}
+			return fmt.Errorf("mounting %s into %s %s", m.Source, dest, err)
 		}
 	}
 	return nil
