@@ -2,12 +2,19 @@
 
 package namespaces
 
+/*
+#include <linux/securebits.h>
+*/
+import "C"
+
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
 	"syscall"
+	"unsafe"
 
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/apparmor"
@@ -94,6 +101,16 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, syn
 		}
 	}
 
+	userNsEnabled := container.Namespaces["NEWUSER"]
+	if userNsEnabled {
+		return execUserNs(container, args)
+	} else {
+		return execDefault(container, args)
+	}
+}
+
+// Init continues execution for non-userns case in this function.
+func execDefault(container *libcontainer.Config, args []string) error {
 	pdeathSignal, err := system.GetParentDeathSignal()
 	if err != nil {
 		return fmt.Errorf("get parent death signal %s", err)
@@ -103,13 +120,159 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, syn
 		return fmt.Errorf("finalize namespace %s", err)
 	}
 
-	// FinalizeNamespace can change user/group which clears the parent death
+	// Changing user/group clears the parent death
 	// signal, so we restore it here.
 	if err := RestoreParentDeathSignal(pdeathSignal); err != nil {
 		return fmt.Errorf("restore parent death signal %s", err)
 	}
 
 	return system.Execv(args[0], args[0:], container.Env)
+}
+
+// Init continues execution for userns case in this function.
+func execUserNs(container *libcontainer.Config, args []string) error {
+	pdeathSignal, err := system.GetParentDeathSignal()
+	if err != nil {
+		return fmt.Errorf("get parent death signal %s", err)
+	}
+	// Retain capabilities on clone.
+	if err := system.Prctl(syscall.PR_SET_SECUREBITS, uintptr(C.SECBIT_KEEP_CAPS|C.SECBIT_NO_SETUID_FIXUP), 0, 0, 0); err != nil {
+		return fmt.Errorf("prctl %s", err)
+	}
+
+	// Switch to the userns uid.
+	if container.UserNsUid != 0 {
+		if err := system.Setuid(int(container.UserNsUid)); err != nil {
+			return fmt.Errorf("setuid %s", err)
+		}
+	}
+
+	// Switch to the userns gid.
+	if container.UserNsGid != 0 {
+		if err := system.Setgid(int(container.UserNsGid)); err != nil {
+			return fmt.Errorf("setgid %s", err)
+		}
+	}
+
+	// Changing user/group clears the parent death
+	// signal, so we restore it here.
+	if err := RestoreParentDeathSignal(pdeathSignal); err != nil {
+		return fmt.Errorf("restore parent death signal %s", err)
+	}
+
+	// Switch into a new user namespace.
+	sPipe, err := NewSyncPipe()
+	if err != nil {
+		return err
+	}
+
+	// Prepare arguments for the raw syscalls.
+	var (
+		r1   uintptr
+		err1 syscall.Errno
+		dir  *byte
+	)
+
+	argv0p, err := syscall.BytePtrFromString(args[0])
+	if err != nil {
+		return err
+	}
+
+	argvp, err := syscall.SlicePtrFromStrings(args[0:])
+	if err != nil {
+		return err
+	}
+
+	envvp, err := syscall.SlicePtrFromStrings(container.Env)
+	if err != nil {
+		return err
+	}
+
+	if container.WorkingDir != "" {
+		dir, err = syscall.BytePtrFromString(container.WorkingDir)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := utils.CloseExecFrom(3); err != nil {
+		return fmt.Errorf("close open file descriptors %s", err)
+	}
+
+	syscall.ForkLock.Lock()
+	r1, _, err1 = syscall.RawSyscall6(syscall.SYS_CLONE, uintptr(syscall.CLONE_NEWUSER|syscall.SIGCHLD), 0, 0, 0, 0, 0)
+	if err1 != 0 {
+		return fmt.Errorf("userns clone: %s", err)
+	}
+
+	if r1 != 0 {
+		// In parent.
+		syscall.ForkLock.Unlock()
+		proc, err := os.FindProcess(int(r1))
+		if err != nil {
+			return err
+		}
+
+		if err = writeUserMappings(int(r1), container.UidMappings, container.GidMappings); err != nil {
+			proc.Kill()
+			return fmt.Errorf("Failed to write mappings: %s", err)
+		}
+		sPipe.Close()
+
+		state, err := proc.Wait()
+		if err != nil {
+			proc.Kill()
+			return fmt.Errorf("wait: %s", err)
+		}
+		os.Exit(state.Sys().(syscall.WaitStatus).ExitStatus())
+	}
+
+	// In child.
+	if dir != nil {
+		_, _, err1 = syscall.RawSyscall(syscall.SYS_CHDIR, uintptr(unsafe.Pointer(dir)), 0, 0)
+		if err1 != 0 {
+			return err1
+		}
+	}
+
+	_, _, err1 = syscall.RawSyscall(syscall.SYS_EXECVE,
+		uintptr(unsafe.Pointer(argv0p)),
+		uintptr(unsafe.Pointer(&argvp[0])),
+		uintptr(unsafe.Pointer(&envvp[0])))
+
+	return nil
+}
+
+// Write UID/GID mappings for a process.
+func writeUserMappings(pid int, uidMappings, gidMappings []libcontainer.IdMap) error {
+	if len(uidMappings) > 5 || len(gidMappings) > 5 {
+		return fmt.Errorf("Only 5 uid/gid mappings are supported by the kernel")
+	}
+
+	uidMapStr := make([]string, len(uidMappings))
+	for i, um := range uidMappings {
+		uidMapStr[i] = fmt.Sprintf("%v %v %v", um.HostId, um.ContainerId, um.Size)
+	}
+
+	gidMapStr := make([]string, len(gidMappings))
+	for i, gm := range gidMappings {
+		gidMapStr[i] = fmt.Sprintf("%v %v %v", gm.HostId, gm.ContainerId, gm.Size)
+	}
+
+	uidMap := []byte(strings.Join(uidMapStr, "\n"))
+	gidMap := []byte(strings.Join(gidMapStr, "\n"))
+
+	uidMappingsFile := fmt.Sprintf("/proc/%v/uid_map", pid)
+	gidMappingsFile := fmt.Sprintf("/proc/%v/gid_map", pid)
+
+	if err := ioutil.WriteFile(uidMappingsFile, uidMap, 0644); err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(gidMappingsFile, gidMap, 0644); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // RestoreParentDeathSignal sets the parent death signal to old.
