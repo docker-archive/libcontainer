@@ -57,7 +57,15 @@ func (s *freezerGroup) GetStats(d *data, stats *cgroups.Stats) error {
 	if err != nil {
 		return err
 	}
-	var data string
+
+	return GetFreezerStats(path, stats)
+}
+
+func GetFreezerStats(path string, stats *cgroups.Stats) error {
+	var (
+		data string
+		err  error
+	)
 	if data, err = getFreezerFileData(filepath.Join(path, "freezer.parent_freezing")); err != nil {
 		return err
 	}

@@ -48,6 +48,10 @@ func (s *cpuGroup) GetStats(d *data, stats *cgroups.Stats) error {
 		return err
 	}
 
+	return GetCpuStats(path, stats)
+}
+
+func GetCpuStats(path string, stats *cgroups.Stats) error {
 	f, err := os.Open(filepath.Join(path, "cpu.stat"))
 	if err != nil {
 		if pathErr, ok := err.(*os.PathError); ok && pathErr.Err == syscall.ENOENT {
