@@ -183,6 +183,11 @@ func InitializeNetworking(container *libcontainer.Config, nspid int, pipe *SyncP
 // flags on clone, unshare, and setns
 func GetNamespaceFlags(namespaces map[string]bool) (flag int) {
 	for key, enabled := range namespaces {
+		// We cannot clone into new user namespace at the same time as
+		// other namespaces.
+		if key == "NEWUSER" {
+			continue
+		}
 		if enabled {
 			if ns := GetNamespace(key); ns != nil {
 				flag |= ns.Value
