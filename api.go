@@ -7,6 +7,8 @@ package libcontainer
 
 import (
 	"io"
+
+	"github.com/docker/libcontainer/cgroups"
 )
 
 // Name of a container.
@@ -107,6 +109,21 @@ type Container interface {
 	// Errors: container no longer exists,
 	//         system error.
 	Config() (*Config, error)
+
+	// TODO(vmarmol): Make cgroups.Cgroup updateable by diffs (only set what you need).
+	// Updates the container's cgroups as per the config.
+	//
+	// If an update fails, the update may only be partially applied.
+	//
+	// Errors: container no longer exists,
+	//         invalid config specified,
+	//         system error applying the config.
+	UpdateCgroups(config *cgroups.Cgroup)
+
+	// TODO(vmarmol): Add other update types:
+	// - Mounts
+	// - Devices
+	// - Network
 
 	// Destroys the container after killing all running processes.
 	//
