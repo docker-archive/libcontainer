@@ -85,6 +85,11 @@ type Factory interface {
 	//
 	// On error, any partially created container parts are cleaned up (the operation is atomic).
 	Create(name Name, config *Config, initialProcess *ProcessConfig) (*Container, int, error)
+
+	// Gets a reference to an existing container with the specified name.
+	//
+	// Errors: name does not refer to an existing container.
+	Get(name Name) (*Container, error)
 }
 
 // A libcontainer container object. Must be created by the Factory above.
