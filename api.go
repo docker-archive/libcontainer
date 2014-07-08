@@ -5,6 +5,9 @@ import (
 	"github.com/docker/libcontainer/network"
 )
 
+// TODO(vmarmol): Rename this file.
+// DEPRECATED: The below portions are only to be used during the transition to the above API.
+
 // Returns all available stats for the given container.
 func GetStats(container *Config, state *State) (*ContainerStats, error) {
 	var containerStats ContainerStats
