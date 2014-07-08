@@ -7,6 +7,8 @@ package libcontainer
 
 import (
 	"io"
+
+	"github.com/docker/libcontainer/cgroups"
 )
 
 // Name of a container.
@@ -65,6 +67,42 @@ type ProcessConfig struct {
 	// - Capabilities
 	// - User/Groups
 	// - Working directory
+}
+
+// EventType is used to identify a particular event.
+type EventType int
+
+const (
+	// Event for changes in the container state.
+	CONTAINER_STATE EventType = iota
+
+	// Event for the out of memory (OOM) condition.
+	CONTAINER_OUT_OF_MEMORY EventType = iota
+)
+
+// Base type for events.
+type Event interface {
+	// Returns the type of the event.
+	Type() EventType
+}
+
+// Container run state update event.
+type RunStateEvent interface {
+	// Type() == CONTAINER_STATE.
+	Event
+
+	// Returns the updated run state of the Container.
+	// Note: this will never be DESTROYED.
+	RunState() RunState
+}
+
+// Out of memory event.
+type OOMEvent interface {
+	// Type() == CONTAINER_OUT_OF_MEMORY.
+	Event
+
+	// Returns memory statistics collected during OOM.
+	MemoryStats() cgroups.MemoryStats
 }
 
 // Factory of libcontainer containers.
@@ -147,4 +185,44 @@ type Container interface {
 	// Errors: container no longer exists,
 	//         system error.
 	Resume() error
+
+	// Registers an interest in events of the given types. The events are delivered to the given
+	// channel. The given channel must not be closed by the caller.
+	//
+	// Only events of the given types are delivered to the given channel. RegisterEvents may
+	// be called more than once to register an interest in more than one set of event types
+	// and/or with more than one channel. If the same channel is used multiple times, the set of
+	// event types is cumulative (and so each event is sent only once to the channel).
+	//
+	// The order of the event types in the given slice does not affect the result: the slice is
+	// treated as a set.
+	//
+	// If an event cannot be delivered to the channel without blocking, the event is discarded.
+	// The caller should avoid losing events by providing a channel with a sufficiently large
+	// buffer.
+	//
+	// If the Container is in the DESTROYED state, do nothing.
+	//
+	// The registration may be removed using RemoveEventRegistration. If a Container is
+	// destroyed, any event registrations are automatically removed and the corresponding channels
+	// closed before the Container state transitions to DESTROYED.
+	//
+	// A single event channel should not be registered with multiple Containers as it will be
+	// closed when it is unregistered from one of the Containers or when one of the Containers
+	// is destroyed.
+	//
+	// Errors: container no longer exists,
+	//         eventTypes is an empty slice,
+	//         eventTypes contains an invalid EventType,
+	//         system error.
+	RegisterEvents(eventTypes []EventType, eventChan <-chan Event) error
+
+	// Removes a registration identified by the given channel. The channel is closed before
+	// removal.
+	//
+	// If the Container is in the DESTROYED state, do nothing.
+	//
+	// Errors: container no longer exists,
+	//         the channel is not registered with this container.
+	RemoveEventRegistration(eChan <-chan Event) error
 }
