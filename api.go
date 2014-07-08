@@ -131,6 +131,21 @@ type Container interface {
 	//         system error.
 	Stats() (*ContainerStats, error)
 
+	// Runs a command inside the container. Returns the PID of the new process (in the caller process's namespace).
+	//
+	// Processes run inside a container with PID namespaces will be reparented to the init in that namespace.
+	// Otherwise, the process will be a child of the current process and the current process must reap it by
+	// calling wait() or waitpid() on it.
+	//
+	// If the Container state is PAUSED, the user process will immediately be paused. Execution
+	// will commence only when the Container is resumed.
+	//
+	// Errors: container no longer exists,
+	//         config is invalid,
+	//         the process is not executable,
+	//         system error.
+	RunIn(config *ProcessConfig) (int, error)
+
 	// If the Container state is RUNNING or PAUSING, sets the Container state to PAUSING and pauses
 	// the execution of any user processes. Asynchronously, when the container finished being paused the
 	// state is changed to PAUSED.
