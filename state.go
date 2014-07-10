@@ -18,6 +18,9 @@ type State struct {
 
 	// Network runtime state.
 	NetworkState network.NetworkState `json:"network_state,omitempty"`
+
+	// Status of the container
+	Status RunState `json:"status,omitempty"`
 }
 
 // The running state of the container.

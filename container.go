@@ -9,14 +9,14 @@ package libcontainer
 // be destroyed by a separate process, any function may return that the container
 // was not found.
 type Container interface {
-	// Returns the path to the container which contains the state
+	// Path returns the path to the container's directory containing the state
 	Path() string
 
 	// Returns the current run state of the container.
 	//
 	// Errors: container no longer exists,
 	//         system error.
-	RunState() (*RunState, error)
+	State() (*State, error)
 
 	// Returns the current config of the container.
 	Config() *Config
