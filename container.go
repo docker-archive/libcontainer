@@ -12,11 +12,8 @@ type Container interface {
 	// Path returns the path to the container's directory containing the state
 	Path() string
 
-	// Returns the current run state of the container.
-	//
-	// Errors: container no longer exists,
-	//         system error.
-	State() (*State, error)
+	// Returns the current status of the container.
+	Status() Status
 
 	// Returns the current config of the container.
 	Config() *Config

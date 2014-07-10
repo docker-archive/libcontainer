@@ -9,6 +9,9 @@ import (
 	"github.com/docker/libcontainer/network"
 )
 
+// this is to enforce that the linuxContainer conforms to the Container interface at compile time
+var _ Container = (*linuxContainer)(nil)
+
 // linuxContainer represents a container that can be executed on linux based host machines
 type linuxContainer struct {
 	// path to the containers state directory
@@ -32,9 +35,9 @@ func (c *linuxContainer) Config() *Config {
 	return c.config
 }
 
-// State returns the containers current state
-func (c *linuxContainer) State() *State {
-	return c.state
+// Status returns the containers current status
+func (c *linuxContainer) Status() Status {
+	return c.state.Status
 }
 
 // Stats returns the container's statistics for various cgroup subsystems
