@@ -27,11 +27,6 @@ type Config struct {
 	// WorkingDir will change the processes current working directory inside the container's rootfs
 	WorkingDir string `json:"working_dir,omitempty"`
 
-	// Env will populate the processes environment with the provided values
-	// Any values from the parent processes will be cleared before the values
-	// provided in Env are provided to the process
-	Env []string `json:"environment,omitempty"`
-
 	// Tty when true will allocate a pty slave on the host for access by the container's process
 	// and ensure that it is mounted inside the container's rootfs
 	Tty bool `json:"tty,omitempty"`

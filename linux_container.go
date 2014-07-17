@@ -4,12 +4,20 @@ package libcontainer
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
+	"syscall"
 
+	"github.com/docker/libcontainer/apparmor"
 	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/cgroups/fs"
 	"github.com/docker/libcontainer/cgroups/systemd"
+	"github.com/docker/libcontainer/label"
+	"github.com/docker/libcontainer/mount"
+	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libcontainer/network"
+	"github.com/docker/libcontainer/security/restrict"
+	"github.com/docker/libcontainer/system"
 )
 
 // this is to enforce that the linuxContainer conforms to the Container interface at compile time
@@ -224,6 +232,112 @@ func (c *linuxContainer) initializeNetworking(process *ProcessConfig) error {
 		}
 
 		if err := strategy.Create((*network.Network)(config), process.pid(), &c.state.NetworkState); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// initializeNamespace is called by libcontainer's init process for the container and runs
+// setup in the newly created namespace
+func (c *linuxContainer) initializeNamespace(process *ProcessConfig) (err error) {
+	if c.state.Status != Init {
+		return fmt.Errorf("initializeNamespace can only be called when container state is Init")
+	}
+
+	if err := replaceEnvironment(process.Env); err != nil {
+		return err
+	}
+
+	if err := process.openConsole(); err != nil {
+		return fmt.Errorf("open console %s", err)
+	}
+
+	if _, err := syscall.Setsid(); err != nil {
+		return fmt.Errorf("setsid %s", err)
+	}
+
+	if c.config.Tty {
+		if err := system.Setctty(); err != nil {
+			return fmt.Errorf("setctty %s", err)
+		}
+	}
+
+	if err := c.setupNetwork(); err != nil {
+		return fmt.Errorf("setup networking %s", err)
+	}
+
+	if err := c.setupRoute(); err != nil {
+		return fmt.Errorf("setup route %s", err)
+	}
+
+	if err := mount.InitializeMountNamespace(c.config.Rootfs, process.ConsolePath,
+		(*mount.MountConfig)(c.config.MountConfig)); err != nil {
+
+		return fmt.Errorf("setup mount namespace %s", err)
+	}
+
+	if c.config.Hostname != "" {
+		if err := syscall.Sethostname([]byte(c.config.Hostname)); err != nil {
+			return fmt.Errorf("sethostname %s", err)
+		}
+	}
+
+	if err := apparmor.ApplyProfile(c.config.AppArmorProfile); err != nil {
+		return fmt.Errorf("set apparmor profile %s: %s", c.config.AppArmorProfile, err)
+	}
+
+	if err := label.SetProcessLabel(c.config.ProcessLabel); err != nil {
+		return fmt.Errorf("set process label %s", err)
+	}
+
+	// TODO: (crosbymichael) make this configurable at the Config level
+	if c.config.RestrictSys {
+		if err := restrict.Restrict("proc/sys", "proc/sysrq-trigger", "proc/irq", "proc/bus", "sys"); err != nil {
+			return err
+		}
+	}
+
+	pdeathSignal, err := system.GetParentDeathSignal()
+	if err != nil {
+		return fmt.Errorf("get parent death signal %s", err)
+	}
+
+	if err := finalizeNamespace(c); err != nil {
+		return fmt.Errorf("finalize namespace %s", err)
+	}
+
+	// FinalizeNamespace can change user/group which clears the parent death
+	// signal, so we restore it here.
+	if err := restoreParentDeathSignal(pdeathSignal); err != nil {
+		return fmt.Errorf("restore parent death signal %s", err)
+	}
+
+	return process.execv()
+}
+
+// setupNetwork uses the Network config if it is not nil to initialize
+// the new veth interface inside the container for use by changing the name to eth0
+// setting the MTU and IP address along with the default gateway
+func (c *linuxContainer) setupNetwork() error {
+	for _, config := range c.config.Networks {
+		strategy, err := network.GetStrategy(config.Type)
+		if err != nil {
+			return err
+		}
+
+		if err := strategy.Initialize((*network.Network)(config), c.state.NetworkState); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *linuxContainer) setupRoute() error {
+	for _, config := range c.config.Routes {
+		if err := netlink.AddRoute(config.Destination, config.Source, config.Gateway, config.InterfaceName); err != nil {
 			return err
 		}
 	}

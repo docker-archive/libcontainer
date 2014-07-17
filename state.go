@@ -44,6 +44,9 @@ const (
 
 	// The container does not exist.
 	Destroyed
+
+	// The container is in the init state inside a newly created namespace
+	Init
 )
 
 // SaveState writes the container's runtime state to a state.json file

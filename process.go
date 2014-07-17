@@ -14,10 +14,10 @@ import (
 // Configuration for a process to be run inside a container.
 type ProcessConfig struct {
 	// The command to be run followed by any arguments.
-	Args []string
+	Args []string `json:"args,omitempty"`
 
 	// Map of environment variables to their values.
-	Env []string
+	Env []string `json:"environment,omitempty"`
 
 	// Stdin is a pointer to a reader which provides the standard input stream.
 	// Stdout is a pointer to a writer which receives the standard output stream.
@@ -27,18 +27,18 @@ type ProcessConfig struct {
 	// discarded.
 	//
 	// Stdout and Stderr may refer to the same writer in which case the output is interspersed.
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
+	Stdin  io.Reader `json:"-"`
+	Stdout io.Writer `json:"-"`
+	Stderr io.Writer `json:"-"`
 
 	// ExtraFiles are used to pass fds to the container's process
-	ExtraFiles []*os.File
+	ExtraFiles []*os.File `json:"-"`
 
 	// Master is the pty master file for the process
-	Master *os.File
+	Master *os.File `json:"-"`
 
 	// ConsolePath is the path to the pty slave for use by the master
-	ConsolePath string
+	ConsolePath string `json:"console_path,omitempty"`
 
 	cmd *exec.Cmd
 
@@ -123,6 +123,18 @@ func (p *ProcessConfig) close() error {
 	}
 
 	return err
+}
+
+func (p *ProcessConfig) openConsole() error {
+	if p.ConsolePath != "" {
+		return console.OpenAndDup(p.ConsolePath)
+	}
+
+	return nil
+}
+
+func (p *ProcessConfig) execv() error {
+	return system.Execv(p.Args[0], p.Args[0:], p.Env)
 }
 
 func (p *ProcessConfig) wait() {
