@@ -34,12 +34,6 @@ func (f *linuxFactory) Create(config *Config, initProcess *ProcessConfig) (Conta
 		return nil, err
 	}
 
-	if config.Tty {
-		if err := initProcess.allocatePty(); err != nil {
-			return nil, err
-		}
-	}
-
 	if err := initProcess.createCommand(f.initPath, config, pipe); err != nil {
 		return nil, err
 	}

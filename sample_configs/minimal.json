@@ -1,4 +1,5 @@
 {
+    "rootfs": "/var/lib/docker/btrfs/subvolumes/242cbab09c5dcd5f12e448508716dfe6c23bb5e26141c49fbfd5bac6e45ee13a",
     "capabilities": [
         "CHOWN",
         "DAC_OVERRIDE",
@@ -168,12 +169,6 @@
             }
         ]
     },
-    "environment": [
-        "HOME=/",
-        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        "HOSTNAME=koye",
-        "TERM=xterm"
-    ],
     "hostname": "koye",
     "namespaces": {
         "NEWIPC": true,
@@ -186,10 +181,8 @@
         {
             "address": "127.0.0.1/0",
             "gateway": "localhost",
-            "mtu": 1500,
             "type": "loopback"
         }
     ],
-    "tty": true,
     "user": "daemon"
 }

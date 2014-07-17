@@ -34,11 +34,11 @@ type ProcessConfig struct {
 	// ExtraFiles are used to pass fds to the container's process
 	ExtraFiles []*os.File `json:"-"`
 
-	// Master is the pty master file for the process
-	Master *os.File `json:"-"`
+	// master is the pty master file for the process
+	master *os.File `json:"-"`
 
-	// ConsolePath is the path to the pty slave for use by the master
-	ConsolePath string `json:"console_path,omitempty"`
+	// consolePath is the path to the pty slave for use by the master
+	consolePath string `json:"console_path,omitempty"`
 
 	cmd *exec.Cmd
 
@@ -61,7 +61,7 @@ func (p *ProcessConfig) createCommand(initPath string, config *Config, pipe *syn
 	p.cmd = exec.Command(initPath, p.Args...)
 	p.pipe = pipe
 
-	if !config.Tty {
+	if p.consolePath == "" {
 		// Note: these are only used in non-tty mode
 		// if there is a tty for the container it will be opened within the namespace and the
 		// fds will be duped to stdin, stdiout, and stderr
@@ -86,17 +86,26 @@ func (p *ProcessConfig) createCommand(initPath string, config *Config, pipe *syn
 	return nil
 }
 
-// allocatePty will create a new pty master and slave pair
-func (p *ProcessConfig) allocatePty() error {
+// AllocatePty will create a new pty master and slave pair
+func (p *ProcessConfig) AllocatePty() (*os.File, error) {
 	master, console, err := console.CreateMasterAndConsole()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	p.Master = master
-	p.ConsolePath = console
+	p.master = master
+	p.consolePath = console
 
-	return nil
+	return master, nil
+}
+
+func (p *ProcessConfig) Signal(sig os.Signal) error {
+	return p.cmd.Process.Signal(sig)
+}
+
+// Wait waits for the process to die then returns the exit status
+func (p *ProcessConfig) Wait() int {
+	return <-p.exitChan
 }
 
 // startTime returns the processes start time
@@ -116,8 +125,8 @@ func (p *ProcessConfig) kill() {
 func (p *ProcessConfig) close() error {
 	err := p.pipe.Close()
 
-	if p.Master != nil {
-		if merr := p.Master.Close(); err == nil {
+	if p.master != nil {
+		if merr := p.master.Close(); err == nil {
 			err = merr
 		}
 	}
@@ -126,8 +135,8 @@ func (p *ProcessConfig) close() error {
 }
 
 func (p *ProcessConfig) openConsole() error {
-	if p.ConsolePath != "" {
-		return console.OpenAndDup(p.ConsolePath)
+	if p.consolePath != "" {
+		return console.OpenAndDup(p.consolePath)
 	}
 
 	return nil

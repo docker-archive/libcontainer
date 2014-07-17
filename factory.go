@@ -22,4 +22,6 @@ type Factory interface {
 	// Container is stopped
 	// System error
 	Load(path string) (Container, error)
+
+	StartInitialization(pipefd uintptr) error
 }

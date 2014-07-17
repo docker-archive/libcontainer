@@ -170,7 +170,13 @@ func (c *linuxContainer) startInitProcess(process *ProcessConfig) error {
 
 	// now that the setup in the parent is complete lets send our state to our child process
 	// so that it can complete setup of the namespace
-	stateData, err := json.Marshal(c.state)
+	initState := &initState{
+		Config:  c.config,
+		State:   c.state,
+		Process: process,
+	}
+
+	stateData, err := json.Marshal(initState)
 	if err != nil {
 		return err
 	}
@@ -257,7 +263,7 @@ func (c *linuxContainer) initializeNamespace(process *ProcessConfig) (err error)
 		return fmt.Errorf("setsid %s", err)
 	}
 
-	if c.config.Tty {
+	if process.consolePath != "" {
 		if err := system.Setctty(); err != nil {
 			return fmt.Errorf("setctty %s", err)
 		}
@@ -271,7 +277,7 @@ func (c *linuxContainer) initializeNamespace(process *ProcessConfig) (err error)
 		return fmt.Errorf("setup route %s", err)
 	}
 
-	if err := mount.InitializeMountNamespace(c.config.Rootfs, process.ConsolePath,
+	if err := mount.InitializeMountNamespace(c.config.Rootfs, process.consolePath,
 		(*mount.MountConfig)(c.config.MountConfig)); err != nil {
 
 		return fmt.Errorf("setup mount namespace %s", err)

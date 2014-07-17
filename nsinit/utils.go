@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/docker/libcontainer"
 )
 
 func loadContainer() (*libcontainer.Config, error) {
-	f, err := os.Open(filepath.Join(dataPath, "container.json"))
+	f, err := os.Open("container.json")
 	if err != nil {
 		return nil, err
 	}

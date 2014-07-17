@@ -27,10 +27,6 @@ type Config struct {
 	// WorkingDir will change the processes current working directory inside the container's rootfs
 	WorkingDir string `json:"working_dir,omitempty"`
 
-	// Tty when true will allocate a pty slave on the host for access by the container's process
-	// and ensure that it is mounted inside the container's rootfs
-	Tty bool `json:"tty,omitempty"`
-
 	// Namespaces specifies the container's namespaces that it should setup when cloning the init process
 	// If a namespace is not provided that namespace is shared from the container's parent process
 	Namespaces map[string]bool `json:"namespaces,omitempty"`
