@@ -58,6 +58,10 @@ func (c *linuxContainer) Stats() (*ContainerStats, error) {
 	return containerStats, nil
 }
 
+func (c *linuxContainer) Start(process *ProcessConfig) (pid int, exitChan chan int, err error) {
+	panic("not implemented")
+}
+
 // Destroy kills all running process inside the container and cleans up any
 // state left on the filesystem
 func (c *linuxContainer) Destroy() error {
