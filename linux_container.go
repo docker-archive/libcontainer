@@ -3,6 +3,7 @@
 package libcontainer
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/docker/libcontainer/cgroups"
@@ -162,7 +163,12 @@ func (c *linuxContainer) startInitProcess(process *ProcessConfig) error {
 
 	// now that the setup in the parent is complete lets send our state to our child process
 	// so that it can complete setup of the namespace
-	if err := process.pipe.SendState(c.state); err != nil {
+	stateData, err := json.Marshal(c.state)
+	if err != nil {
+		return err
+	}
+
+	if err := process.pipe.SendToChild(stateData); err != nil {
 		process.kill()
 
 		return err
@@ -170,7 +176,7 @@ func (c *linuxContainer) startInitProcess(process *ProcessConfig) error {
 
 	// finally we need to wait on the child to finish setup of the namespace before it will
 	// exec the users app
-	if err := process.pipe.ErrorsFromChildInit(); err != nil {
+	if err := process.pipe.ErrorsFromChild(); err != nil {
 		process.kill()
 
 		return err
