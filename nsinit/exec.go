@@ -34,7 +34,7 @@ func execAction(context *cli.Context) {
 		exitCode int
 		master   *os.File
 		sigc     = make(chan os.Signal, 10)
-		factory  = libcontainer.New(os.Args[0])
+		factory  = libcontainer.New([]string{os.Args[0], "init", "--fd", "3", "--"})
 	)
 
 	signal.Notify(sigc)
@@ -46,6 +46,7 @@ func execAction(context *cli.Context) {
 
 	process := &libcontainer.ProcessConfig{
 		Args:   context.Args(),
+		Env:    context.StringSlice("env"),
 		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,

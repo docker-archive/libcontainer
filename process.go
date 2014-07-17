@@ -2,6 +2,7 @@ package libcontainer
 
 import (
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"syscall"
@@ -53,12 +54,13 @@ func (p *ProcessConfig) ExitChan() chan int {
 
 // createCommand will create the *exec.Cmd with the provided path to libcontainer's init binary
 // that sets up the container inside the namespaces based on the config
-func (p *ProcessConfig) createCommand(initPath string, config *Config, pipe *syncpipe.SyncPipe) error {
+func (p *ProcessConfig) createCommand(initArgs []string, config *Config, pipe *syncpipe.SyncPipe) error {
 	if p.cmd != nil {
 		return ErrProcessCommandExists
 	}
 
-	p.cmd = exec.Command(initPath, p.Args...)
+	p.cmd = exec.Command(initArgs[0], append(initArgs[1:], p.Args...)...)
+	log.Println(p.cmd.Path, p.cmd.Args)
 	p.pipe = pipe
 
 	if p.consolePath == "" {

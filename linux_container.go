@@ -45,8 +45,9 @@ type linuxContainer struct {
 
 func newLinuxContainer(config *Config, state *State) *linuxContainer {
 	return &linuxContainer{
-		config: config,
-		state:  state,
+		config:    config,
+		state:     state,
+		processes: make(map[int]*ProcessConfig),
 	}
 }
 

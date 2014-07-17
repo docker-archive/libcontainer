@@ -2,7 +2,6 @@ package nsinit
 
 import (
 	"log"
-	"os"
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
@@ -20,7 +19,7 @@ var (
 )
 
 func initAction(context *cli.Context) {
-	factory := libcontainer.New(os.Args[0])
+	factory := libcontainer.New([]string{})
 
 	if context.Int("fd") == 0 {
 		log.Fatal("--fd must be specified for init process")

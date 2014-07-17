@@ -11,13 +11,13 @@ import (
 )
 
 type linuxFactory struct {
-	initPath string
+	initArgs []string
 }
 
 // New returns the default factory for container creation in libcontainer
-func New(initBinaryPath string) Factory {
+func New(initArgs []string) Factory {
 	return &linuxFactory{
-		initPath: initBinaryPath,
+		initArgs: initArgs,
 	}
 }
 
@@ -34,7 +34,7 @@ func (f *linuxFactory) Create(config *Config, initProcess *ProcessConfig) (Conta
 		return nil, err
 	}
 
-	if err := initProcess.createCommand(f.initPath, config, pipe); err != nil {
+	if err := initProcess.createCommand(f.initArgs, config, pipe); err != nil {
 		return nil, err
 	}
 
