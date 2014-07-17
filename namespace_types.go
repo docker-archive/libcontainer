@@ -1,7 +1,5 @@
 package libcontainer
 
-import "errors"
-
 type (
 	Namespace struct {
 		Key   string `json:"key,omitempty"`
@@ -15,9 +13,7 @@ type (
 // into the names of the files located in /proc/<pid>/ns/* for
 // each namespace
 var (
-	namespaceList      = Namespaces{}
-	ErrUnkownNamespace = errors.New("Unknown namespace")
-	ErrUnsupported     = errors.New("Unsupported method")
+	namespaceList = Namespaces{}
 )
 
 func (ns *Namespace) String() string {

@@ -22,7 +22,8 @@ func preload(context *cli.Context) error {
 func NsInit() {
 	app := cli.NewApp()
 	app.Name = "nsinit"
-	app.Version = "0.1"
+	app.Usage = "just workin on containers"
+	app.Version = "0.2"
 	app.Author = "libcontainer maintainers"
 
 	app.Before = preload
