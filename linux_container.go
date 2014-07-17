@@ -43,9 +43,8 @@ type linuxContainer struct {
 	activeCgroup cgroups.ActiveCgroup
 }
 
-func newLinuxContainer(path string, config *Config, state *State) *linuxContainer {
+func newLinuxContainer(config *Config, state *State) *linuxContainer {
 	return &linuxContainer{
-		path:   path,
 		config: config,
 		state:  state,
 	}

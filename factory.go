@@ -12,7 +12,7 @@ type Factory interface {
 	// System error
 	//
 	// On error, any partially created container parts are cleaned up (the operation is atomic).
-	Create(path string, config *Config, initProcess *ProcessConfig) (Container, error)
+	Create(config *Config, initProcess *ProcessConfig) (Container, error)
 
 	// Load takes the path for an existing container and reconstructs the container
 	// from the state.

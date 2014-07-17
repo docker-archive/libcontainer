@@ -11,22 +11,23 @@ import (
 )
 
 type linuxFactory struct {
+	initPath string
 }
 
 // New returns the default factory for container creation in libcontainer
-func New() Factory {
-	return &linuxFactory{}
+func New(initBinaryPath string) Factory {
+	return &linuxFactory{
+		initPath: initBinaryPath,
+	}
 }
 
-// tty
-// veths
-func (f *linuxFactory) Create(path string, config *Config, initProcess *ProcessConfig) (Container, error) {
+func (f *linuxFactory) Create(config *Config, initProcess *ProcessConfig) (Container, error) {
 	state := &State{
 		Status:       Created,
 		NetworkState: network.NetworkState{},
 	}
 
-	container := newLinuxContainer(path, config, state)
+	container := newLinuxContainer(config, state)
 
 	pipe, err := syncpipe.NewSyncPipe()
 	if err != nil {
@@ -39,7 +40,7 @@ func (f *linuxFactory) Create(path string, config *Config, initProcess *ProcessC
 		}
 	}
 
-	if err := initProcess.createCommand(path, config, pipe); err != nil {
+	if err := initProcess.createCommand(f.initPath, config, pipe); err != nil {
 		return nil, err
 	}
 
@@ -88,7 +89,7 @@ func (f *linuxFactory) StartInitialization(pipefd uintptr) (err error) {
 	state.State.Status = Init
 
 	// now that we have the initState we can reconstruct the container
-	container := newLinuxContainer("", state.Config, state.State)
+	container := newLinuxContainer(state.Config, state.State)
 
 	return container.initializeNamespace(state.Process)
 }
