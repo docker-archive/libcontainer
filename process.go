@@ -101,7 +101,7 @@ func (p *ProcessConfig) allocatePty() error {
 
 // startTime returns the processes start time
 func (p *ProcessConfig) startTime() (string, error) {
-	return system.GetProcessStartTime(command.Process.Pid)
+	return system.GetProcessStartTime(p.cmd.Process.Pid)
 }
 
 func (p *ProcessConfig) pid() int {

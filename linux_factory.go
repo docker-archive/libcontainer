@@ -1,6 +1,9 @@
 package libcontainer
 
-import "github.com/docker/libcontainer/syncpipe"
+import (
+	"github.com/docker/libcontainer/network"
+	"github.com/docker/libcontainer/syncpipe"
+)
 
 type linuxFactory struct {
 }
@@ -15,7 +18,7 @@ func New() Factory {
 func (f *linuxFactory) Create(path string, config *Config, initProcess *ProcessConfig) (Container, error) {
 	state := &State{
 		Status:       Created,
-		NetworkState: Network{},
+		NetworkState: network.NetworkState{},
 	}
 
 	container := newLinuxContainer(path, config, state)

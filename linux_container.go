@@ -29,6 +29,9 @@ type linuxContainer struct {
 
 	// a map of commands in the order which they were created
 	processes map[int]*ProcessConfig
+
+	// active cgroup to cleanup
+	activeCgroup cgroups.ActiveCgroup
 }
 
 func newLinuxContainer(path string, config *Config, state *State) *linuxContainer {
@@ -73,6 +76,7 @@ func (c *linuxContainer) Stats() (*ContainerStats, error) {
 	return containerStats, nil
 }
 
+// Start runs a new process in the container
 func (c *linuxContainer) Start(process *ProcessConfig) (pid int, exitChan chan int, err error) {
 	panic("not implemented")
 }
@@ -80,7 +84,12 @@ func (c *linuxContainer) Start(process *ProcessConfig) (pid int, exitChan chan i
 // Destroy kills all running process inside the container and cleans up any
 // state left on the filesystem
 func (c *linuxContainer) Destroy() error {
-	panic("not implemented")
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
+	c.state.Status = Destroyed
+
+	return c.activeCgroup.Cleanup()
 }
 
 // Processes return the PIDs for processes running inside the container
@@ -137,19 +146,11 @@ func (c *linuxContainer) startInitProcess(process *ProcessConfig) error {
 	c.state.InitStartTime = startTime
 
 	// Do this before syncing with child so that no children can escape the cgroup
-	cleaner, err := c.applyCgroups(process)
-	if err != nil {
+	if err := c.applyCgroups(process); err != nil {
 		process.kill()
 
 		return err
 	}
-
-	/*
-	   TODO: cgroup cleanup can be handled at the container destroy level
-	   if cleaner != nil {
-	       cleaner.Cleanup()
-	   }
-	*/
 
 	// networking initailiztion needs to happen after we have a running process so we can have the pid of
 	// namespaced process to move veths or other network requirements into the namespace
@@ -175,6 +176,8 @@ func (c *linuxContainer) startInitProcess(process *ProcessConfig) error {
 		return err
 	}
 
+	c.state.Status = Running
+
 	// finally the users' process should be running inside the container and we did not encounter
 	// any errors during the init of the namespace.  we can now wait on the process and return
 	go process.wait()
@@ -183,29 +186,38 @@ func (c *linuxContainer) startInitProcess(process *ProcessConfig) error {
 }
 
 // applyCgroups places the process into the correct container cgroups
-func (c *linuxContainer) applyCgroups(process *ProcessConfig) (cgroups.Cleaner, error) {
-	cgroupConfig := c.config.Cgroups
-	if cgroupConfig != nil {
+func (c *linuxContainer) applyCgroups(process *ProcessConfig) error {
+	var (
+		err          error
+		active       cgroups.ActiveCgroup
+		cgroupConfig = c.config.Cgroups
+	)
 
+	if cgroupConfig != nil {
 		if systemd.UseSystemd() {
-			return systemd.Apply(cgroupConfig, process.pid())
+			active, err = systemd.Apply(cgroupConfig, process.pid())
 		}
 
-		return fs.Apply(cgroupConfig, process.pid())
+		active, err = fs.Apply(cgroupConfig, process.pid())
 	}
 
-	return nil, nil
+	if err != nil {
+		return err
+	}
+
+	c.activeCgroup = active
+
+	return nil
 }
 
 func (c *linuxContainer) initializeNetworking(process *ProcessConfig) error {
-	for _, config := range container.Networks {
-
+	for _, config := range c.config.Networks {
 		strategy, err := network.GetStrategy(config.Type)
 		if err != nil {
 			return err
 		}
 
-		if err := strategy.Create((*network.Network)(config), process.pid(), c.state.NetworkState); err != nil {
+		if err := strategy.Create((*network.Network)(config), process.pid(), &c.state.NetworkState); err != nil {
 			return err
 		}
 	}
