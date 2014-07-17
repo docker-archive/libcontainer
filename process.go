@@ -13,7 +13,7 @@ import (
 )
 
 // Configuration for a process to be run inside a container.
-type ProcessConfig struct {
+type Process struct {
 	// The command to be run followed by any arguments.
 	Args []string `json:"args,omitempty"`
 
@@ -48,13 +48,13 @@ type ProcessConfig struct {
 	exitChan chan int
 }
 
-func (p *ProcessConfig) ExitChan() chan int {
+func (p *Process) ExitChan() chan int {
 	return p.exitChan
 }
 
 // createCommand will create the *exec.Cmd with the provided path to libcontainer's init binary
 // that sets up the container inside the namespaces based on the config
-func (p *ProcessConfig) createCommand(initArgs []string, config *Config, pipe *syncpipe.SyncPipe) error {
+func (p *Process) createCommand(initArgs []string, config *Config, pipe *syncpipe.SyncPipe) error {
 	if p.cmd != nil {
 		return ErrProcessCommandExists
 	}
@@ -89,7 +89,7 @@ func (p *ProcessConfig) createCommand(initArgs []string, config *Config, pipe *s
 }
 
 // AllocatePty will create a new pty master and slave pair
-func (p *ProcessConfig) AllocatePty() (*os.File, error) {
+func (p *Process) AllocatePty() (*os.File, error) {
 	master, console, err := console.CreateMasterAndConsole()
 	if err != nil {
 		return nil, err
@@ -101,30 +101,30 @@ func (p *ProcessConfig) AllocatePty() (*os.File, error) {
 	return master, nil
 }
 
-func (p *ProcessConfig) Signal(sig os.Signal) error {
+func (p *Process) Signal(sig os.Signal) error {
 	return p.cmd.Process.Signal(sig)
 }
 
 // Wait waits for the process to die then returns the exit status
-func (p *ProcessConfig) Wait() int {
+func (p *Process) Wait() int {
 	return <-p.exitChan
 }
 
 // startTime returns the processes start time
-func (p *ProcessConfig) startTime() (string, error) {
+func (p *Process) startTime() (string, error) {
 	return system.GetProcessStartTime(p.cmd.Process.Pid)
 }
 
-func (p *ProcessConfig) pid() int {
+func (p *Process) pid() int {
 	return p.cmd.Process.Pid
 }
 
-func (p *ProcessConfig) kill() {
+func (p *Process) kill() {
 	p.cmd.Process.Kill()
 	p.cmd.Wait()
 }
 
-func (p *ProcessConfig) close() error {
+func (p *Process) close() error {
 	err := p.pipe.Close()
 
 	if p.Master != nil {
@@ -136,7 +136,7 @@ func (p *ProcessConfig) close() error {
 	return err
 }
 
-func (p *ProcessConfig) openConsole() error {
+func (p *Process) openConsole() error {
 	if p.ConsolePath != "" {
 		return console.OpenAndDup(p.ConsolePath)
 	}
@@ -144,11 +144,11 @@ func (p *ProcessConfig) openConsole() error {
 	return nil
 }
 
-func (p *ProcessConfig) execv() error {
+func (p *Process) execv() error {
 	return system.Execv(p.Args[0], p.Args[0:], p.Env)
 }
 
-func (p *ProcessConfig) wait() {
+func (p *Process) wait() {
 	if err := p.cmd.Wait(); err != nil {
 		if _, ok := err.(*exec.ExitError); !ok {
 			// TODO: unexpected error from wait

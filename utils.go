@@ -119,7 +119,7 @@ func finalizeNamespace(container *Config) error {
 	return nil
 }
 
-func replaceEnvironment(process *ProcessConfig) error {
+func replaceEnvironment(process *Process) error {
 	for _, pair := range process.Env {
 		p := strings.SplitN(pair, "=", 2)
 		if len(p) < 2 {

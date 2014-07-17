@@ -21,7 +21,7 @@ func New(initArgs []string) Factory {
 	}
 }
 
-func (f *linuxFactory) Create(config *Config, initProcess *ProcessConfig) (Container, error) {
+func (f *linuxFactory) Create(config *Config, initProcess *Process) (Container, error) {
 	state := &State{
 		Status:       Created,
 		NetworkState: network.NetworkState{},
@@ -94,7 +94,7 @@ func (f *linuxFactory) initialGlobalState() {
 }
 
 type initState struct {
-	Process *ProcessConfig `json:"process,omitempty"`
+	Process *Process `json:"process,omitempty"`
 	Config  *Config        `json:"config,omitempty"`
 	State   *State         `json:"state,omitempty"`
 }

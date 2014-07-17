@@ -37,7 +37,7 @@ type linuxContainer struct {
 	state *State
 
 	// a map of commands in the order which they were created
-	processes map[int]*ProcessConfig
+	processes map[int]*Process
 
 	// active cgroup to cleanup
 	activeCgroup cgroups.ActiveCgroup
@@ -47,7 +47,7 @@ func newLinuxContainer(config *Config, state *State) *linuxContainer {
 	return &linuxContainer{
 		config:    config,
 		state:     state,
-		processes: make(map[int]*ProcessConfig),
+		processes: make(map[int]*Process),
 	}
 }
 
@@ -86,7 +86,7 @@ func (c *linuxContainer) Stats() (*ContainerStats, error) {
 }
 
 // Start runs a new process in the container
-func (c *linuxContainer) Start(process *ProcessConfig) (pid int, exitChan chan int, err error) {
+func (c *linuxContainer) Start(process *Process) (pid int, exitChan chan int, err error) {
 	panic("not implemented")
 }
 
@@ -128,7 +128,7 @@ func (c *linuxContainer) toggleCgroupFreezer(state cgroups.FreezerState) (err er
 	return err
 }
 
-func (c *linuxContainer) startInitProcess(process *ProcessConfig) error {
+func (c *linuxContainer) startInitProcess(process *Process) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
@@ -206,7 +206,7 @@ func (c *linuxContainer) startInitProcess(process *ProcessConfig) error {
 }
 
 // applyCgroups places the process into the correct container cgroups
-func (c *linuxContainer) applyCgroups(process *ProcessConfig) error {
+func (c *linuxContainer) applyCgroups(process *Process) error {
 	var (
 		err          error
 		active       cgroups.ActiveCgroup
@@ -230,7 +230,7 @@ func (c *linuxContainer) applyCgroups(process *ProcessConfig) error {
 	return nil
 }
 
-func (c *linuxContainer) initializeNetworking(process *ProcessConfig) error {
+func (c *linuxContainer) initializeNetworking(process *Process) error {
 	for _, config := range c.config.Networks {
 		strategy, err := network.GetStrategy(config.Type)
 		if err != nil {
@@ -247,7 +247,7 @@ func (c *linuxContainer) initializeNetworking(process *ProcessConfig) error {
 
 // initializeNamespace is called by libcontainer's init process for the container and runs
 // setup in the newly created namespace
-func (c *linuxContainer) initializeNamespace(process *ProcessConfig) (err error) {
+func (c *linuxContainer) initializeNamespace(process *Process) (err error) {
 	if c.state.Status != Init {
 		return fmt.Errorf("initializeNamespace can only be called when container state is Init")
 	}

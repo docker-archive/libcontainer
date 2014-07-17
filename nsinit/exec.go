@@ -44,7 +44,7 @@ func execAction(context *cli.Context) {
 		log.Fatal(err)
 	}
 
-	process := &libcontainer.ProcessConfig{
+	process := &libcontainer.Process{
 		Args:   context.Args(),
 		Env:    context.StringSlice("env"),
 		Stdin:  os.Stdin,
