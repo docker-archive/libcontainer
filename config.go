@@ -12,6 +12,9 @@ type Network network.Network
 
 // Config defines configuration options for executing a process inside a contained environment.
 type Config struct {
+	// Rootfs is the container's root filesystem used as the jail for the container
+	Rootfs string `json:"rootfs,omitempty"`
+
 	// Mount specific options.
 	MountConfig *MountConfig `json:"mount_config,omitempty"`
 

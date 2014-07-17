@@ -30,8 +30,11 @@ const (
 	// The name of the runtime state file
 	stateFile = "state.json"
 
+	// The container has been created but no processes are running.
+	Created Status = iota
+
 	// The container exists and is running.
-	Running Status = iota
+	Running
 
 	// The container exists, it is in the process of being paused.
 	Pausing
