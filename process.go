@@ -36,10 +36,10 @@ type ProcessConfig struct {
 	ExtraFiles []*os.File `json:"-"`
 
 	// master is the pty master file for the process
-	master *os.File `json:"-"`
+	Master *os.File `json:"-"`
 
 	// consolePath is the path to the pty slave for use by the master
-	consolePath string `json:"console_path,omitempty"`
+	ConsolePath string `json:"console_path,omitempty"`
 
 	cmd *exec.Cmd
 
@@ -63,7 +63,7 @@ func (p *ProcessConfig) createCommand(initArgs []string, config *Config, pipe *s
 	log.Println(p.cmd.Path, p.cmd.Args)
 	p.pipe = pipe
 
-	if p.consolePath == "" {
+	if p.ConsolePath == "" {
 		// Note: these are only used in non-tty mode
 		// if there is a tty for the container it will be opened within the namespace and the
 		// fds will be duped to stdin, stdiout, and stderr
@@ -95,8 +95,8 @@ func (p *ProcessConfig) AllocatePty() (*os.File, error) {
 		return nil, err
 	}
 
-	p.master = master
-	p.consolePath = console
+	p.Master = master
+	p.ConsolePath = console
 
 	return master, nil
 }
@@ -127,8 +127,8 @@ func (p *ProcessConfig) kill() {
 func (p *ProcessConfig) close() error {
 	err := p.pipe.Close()
 
-	if p.master != nil {
-		if merr := p.master.Close(); err == nil {
+	if p.Master != nil {
+		if merr := p.Master.Close(); err == nil {
 			err = merr
 		}
 	}
@@ -137,8 +137,8 @@ func (p *ProcessConfig) close() error {
 }
 
 func (p *ProcessConfig) openConsole() error {
-	if p.consolePath != "" {
-		return console.OpenAndDup(p.consolePath)
+	if p.ConsolePath != "" {
+		return console.OpenAndDup(p.ConsolePath)
 	}
 
 	return nil

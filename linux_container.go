@@ -264,7 +264,7 @@ func (c *linuxContainer) initializeNamespace(process *ProcessConfig) (err error)
 		return fmt.Errorf("setsid %s", err)
 	}
 
-	if process.consolePath != "" {
+	if process.ConsolePath != "" {
 		if err := system.Setctty(); err != nil {
 			return fmt.Errorf("setctty %s", err)
 		}
@@ -278,7 +278,7 @@ func (c *linuxContainer) initializeNamespace(process *ProcessConfig) (err error)
 		return fmt.Errorf("setup route %s", err)
 	}
 
-	if err := mount.InitializeMountNamespace(c.config.Rootfs, process.consolePath,
+	if err := mount.InitializeMountNamespace(c.config.Rootfs, process.ConsolePath,
 		(*mount.MountConfig)(c.config.MountConfig)); err != nil {
 
 		return fmt.Errorf("setup mount namespace %s", err)
