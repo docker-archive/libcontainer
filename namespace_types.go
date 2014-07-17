@@ -1,4 +1,4 @@
-package namespaces
+package libcontainer
 
 import "errors"
 
@@ -24,7 +24,7 @@ func (ns *Namespace) String() string {
 	return ns.Key
 }
 
-func GetNamespace(key string) *Namespace {
+func getNamespace(key string) *Namespace {
 	for _, ns := range namespaceList {
 		if ns.Key == key {
 			cpy := *ns
