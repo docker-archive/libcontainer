@@ -246,7 +246,7 @@ func (c *linuxContainer) initializeNamespace(process *ProcessConfig) (err error)
 		return fmt.Errorf("initializeNamespace can only be called when container state is Init")
 	}
 
-	if err := replaceEnvironment(process.Env); err != nil {
+	if err := replaceEnvironment(process); err != nil {
 		return err
 	}
 
@@ -304,7 +304,7 @@ func (c *linuxContainer) initializeNamespace(process *ProcessConfig) (err error)
 		return fmt.Errorf("get parent death signal %s", err)
 	}
 
-	if err := finalizeNamespace(c); err != nil {
+	if err := finalizeNamespace(c.config); err != nil {
 		return fmt.Errorf("finalize namespace %s", err)
 	}
 
@@ -327,7 +327,7 @@ func (c *linuxContainer) setupNetwork() error {
 			return err
 		}
 
-		if err := strategy.Initialize((*network.Network)(config), c.state.NetworkState); err != nil {
+		if err := strategy.Initialize((*network.Network)(config), &c.state.NetworkState); err != nil {
 			return err
 		}
 	}

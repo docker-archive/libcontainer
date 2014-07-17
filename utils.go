@@ -6,7 +6,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/security/capabilities"
 	"github.com/docker/libcontainer/system"
 	"github.com/docker/libcontainer/utils"
@@ -80,7 +79,7 @@ func setupUser(u string) error {
 // FinalizeNamespace drops the caps, sets the correct user
 // and working dir, and closes any leaky file descriptors
 // before execing the command inside the namespace
-func finalizeNamespace(container *libcontainer.Config) error {
+func finalizeNamespace(container *Config) error {
 	// Ensure that all non-standard fds we may have accidentally
 	// inherited are marked close-on-exec so they stay out of the
 	// container
@@ -98,7 +97,7 @@ func finalizeNamespace(container *libcontainer.Config) error {
 		return fmt.Errorf("set keep caps %s", err)
 	}
 
-	if err := SetupUser(container.User); err != nil {
+	if err := setupUser(container.User); err != nil {
 		return fmt.Errorf("setup user %s", err)
 	}
 
@@ -120,12 +119,13 @@ func finalizeNamespace(container *libcontainer.Config) error {
 	return nil
 }
 
-func replaceEnvironment(container *libcontainer.Config) error {
-	for _, pair := range container.Env {
+func replaceEnvironment(process *ProcessConfig) error {
+	for _, pair := range process.Env {
 		p := strings.SplitN(pair, "=", 2)
 		if len(p) < 2 {
 			return fmt.Errorf("invalid environment '%v'", pair)
 		}
+
 		if err := os.Setenv(p[0], p[1]); err != nil {
 			return err
 		}

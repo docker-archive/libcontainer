@@ -56,7 +56,7 @@ func (f *linuxFactory) Load(path string) (Container, error) {
 
 // StartInitialization loads a container by opening the pipe fd from the parent to read the configuration and state
 // This is a low level implementation detail of the reexec and should not be consumed externally
-func (f *linuxFactory) StartInitialization(pipefd int) (err error) {
+func (f *linuxFactory) StartInitialization(pipefd uintptr) (err error) {
 	f.initialGlobalState()
 
 	// clear the current processes environment and load in the containers
