@@ -7,22 +7,19 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-var logPath = os.Getenv("log")
+var logger *log.Logger
 
-func preload(context *cli.Context) error {
-	if logPath != "" {
-		if err := openLog(logPath); err != nil {
-			return err
-		}
-	}
+func preload(context *cli.Context) (err error) {
+	logger, err = openLog()
 
-	return nil
+	return err
 }
 
 func NsInit() {
 	app := cli.NewApp()
 	app.Name = "nsinit"
-	app.Version = "0.1"
+	app.Usage = "just workin on containers"
+	app.Version = "0.2"
 	app.Author = "libcontainer maintainers"
 
 	app.Before = preload

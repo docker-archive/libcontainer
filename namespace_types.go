@@ -1,6 +1,4 @@
-package namespaces
-
-import "errors"
+package libcontainer
 
 type (
 	Namespace struct {
@@ -15,16 +13,14 @@ type (
 // into the names of the files located in /proc/<pid>/ns/* for
 // each namespace
 var (
-	namespaceList      = Namespaces{}
-	ErrUnkownNamespace = errors.New("Unknown namespace")
-	ErrUnsupported     = errors.New("Unsupported method")
+	namespaceList = Namespaces{}
 )
 
 func (ns *Namespace) String() string {
 	return ns.Key
 }
 
-func GetNamespace(key string) *Namespace {
+func getNamespace(key string) *Namespace {
 	for _, ns := range namespaceList {
 		if ns.Key == key {
 			cpy := *ns

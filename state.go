@@ -1,12 +1,6 @@
 package libcontainer
 
-import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-
-	"github.com/docker/libcontainer/network"
-)
+import "github.com/docker/libcontainer/network"
 
 // State represents a running container's state
 type State struct {
@@ -26,12 +20,39 @@ type State struct {
 // Status of the container
 type Status int
 
+func (s Status) String() string {
+	switch s {
+	case Created:
+		return "created"
+	case Running:
+		return "running"
+	case Resuming:
+		return "resuming"
+	case Pausing:
+		return "pausing"
+	case Paused:
+		return "paused"
+	case Destroyed:
+		return "destroyed"
+	case Init:
+		return "init"
+	}
+
+	return "unknown"
+}
+
 const (
 	// The name of the runtime state file
 	stateFile = "state.json"
 
+	// The container has been created but no processes are running.
+	Created Status = iota
+
 	// The container exists and is running.
-	Running Status = iota
+	Running
+
+	// The container exists, it is int the process of being resumed
+	Resuming
 
 	// The container exists, it is in the process of being paused.
 	Pausing
@@ -41,37 +62,7 @@ const (
 
 	// The container does not exist.
 	Destroyed
+
+	// The container is in the init state inside a newly created namespace
+	Init
 )
-
-// SaveState writes the container's runtime state to a state.json file
-// in the specified path
-func SaveState(basePath string, state *State) error {
-	f, err := os.Create(filepath.Join(basePath, stateFile))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return json.NewEncoder(f).Encode(state)
-}
-
-// GetState reads the state.json file for a running container
-func GetState(basePath string) (*State, error) {
-	f, err := os.Open(filepath.Join(basePath, stateFile))
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	var state *State
-	if err := json.NewDecoder(f).Decode(&state); err != nil {
-		return nil, err
-	}
-
-	return state, nil
-}
-
-// DeleteState deletes the state.json file
-func DeleteState(basePath string) error {
-	return os.Remove(filepath.Join(basePath, stateFile))
-}

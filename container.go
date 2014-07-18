@@ -24,7 +24,7 @@ type Container interface {
 	//         config is invalid,
 	//         container is paused,
 	//         system error.
-	Start(*ProcessConfig) (pid int, exitChan chan int, err error)
+	Start(*Process) (pid int, exitChan chan int, err error)
 
 	// Destroys the container after killing all running processes.
 	//

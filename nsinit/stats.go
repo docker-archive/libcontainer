@@ -1,13 +1,6 @@
 package nsinit
 
-import (
-	"encoding/json"
-	"fmt"
-	"log"
-
-	"github.com/codegangsta/cli"
-	"github.com/docker/libcontainer"
-)
+import "github.com/codegangsta/cli"
 
 var statsCommand = cli.Command{
 	Name:   "stats",
@@ -16,24 +9,26 @@ var statsCommand = cli.Command{
 }
 
 func statsAction(context *cli.Context) {
-	container, err := loadContainer()
-	if err != nil {
-		log.Fatal(err)
-	}
+	/*
+		container, err := loadContainer()
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	state, err := libcontainer.GetState(dataPath)
-	if err != nil {
-		log.Fatal(err)
-	}
+		state, err := libcontainer.GetState(dataPath)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	stats, err := libcontainer.GetStats(container, state)
-	if err != nil {
-		log.Fatal(err)
-	}
-	data, err := json.MarshalIndent(stats, "", "\t")
-	if err != nil {
-		log.Fatal(err)
-	}
+		stats, err := libcontainer.GetStats(container, state)
+		if err != nil {
+			log.Fatal(err)
+		}
+		data, err := json.MarshalIndent(stats, "", "\t")
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	fmt.Printf("%s", data)
+		fmt.Printf("%s", data)
+	*/
 }
