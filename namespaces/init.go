@@ -98,7 +98,13 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, syn
 
 	// TODO: (crosbymichael) make this configurable at the Config level
 	if container.RestrictSys {
-		if err := restrict.Restrict("proc/sys", "proc/sysrq-trigger", "proc/irq", "proc/bus", "sys"); err != nil {
+		if err := restrict.Restrict(rootfs, []string{
+			"proc/sys",
+			"proc/sysrq-trigger",
+			"proc/irq",
+			"proc/bus",
+			"sys",
+		}); err != nil {
 			return err
 		}
 	}

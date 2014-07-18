@@ -5,13 +5,16 @@ package restrict
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 )
 
 const defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 
-func mountReadonly(path string) error {
+func mountReadonly(rootfs, opath string) error {
+	path := filepath.Join(rootfs, opath)
+
 	for i := 0; i < 5; i++ {
 		if err := syscall.Mount("", path, "", syscall.MS_REMOUNT|syscall.MS_RDONLY, ""); err != nil && !os.IsNotExist(err) {
 			switch err {
@@ -38,14 +41,14 @@ func mountReadonly(path string) error {
 
 // This has to be called while the container still has CAP_SYS_ADMIN (to be able to perform mounts).
 // However, afterwards, CAP_SYS_ADMIN should be dropped (otherwise the user will be able to revert those changes).
-func Restrict(mounts ...string) error {
+func Restrict(rootfs string, mounts []string) error {
 	for _, dest := range mounts {
-		if err := mountReadonly(dest); err != nil {
+		if err := mountReadonly(rootfs, dest); err != nil {
 			return fmt.Errorf("unable to remount %s readonly: %s", dest, err)
 		}
 	}
 
-	if err := syscall.Mount("/dev/null", "/proc/kcore", "", syscall.MS_BIND, ""); err != nil && !os.IsNotExist(err) {
+	if err := syscall.Mount("/dev/null", filepath.Join(rootfs, "/proc/kcore"), "", syscall.MS_BIND, ""); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("unable to bind-mount /dev/null over /proc/kcore: %s", err)
 	}
 
