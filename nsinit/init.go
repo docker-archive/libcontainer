@@ -19,7 +19,7 @@ var (
 )
 
 func initAction(context *cli.Context) {
-	factory := libcontainer.New([]string{})
+	factory := libcontainer.New([]string{}, logger)
 
 	if context.Int("fd") == 0 {
 		log.Fatal("--fd must be specified for init process")

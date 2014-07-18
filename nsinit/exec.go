@@ -34,7 +34,7 @@ func execAction(context *cli.Context) {
 		exitCode int
 		master   *os.File
 		sigc     = make(chan os.Signal, 10)
-		factory  = libcontainer.New([]string{os.Args[0], "init", "--fd", "3", "--"})
+		factory  = libcontainer.New([]string{os.Args[0], "init", "--fd", "3", "--"}, logger)
 	)
 
 	signal.Notify(sigc)
@@ -68,10 +68,11 @@ func execAction(context *cli.Context) {
 		defer term.RestoreTerminal(os.Stdin.Fd(), state)
 	}
 
-	_, err = factory.Create(config, process)
+	container, err := factory.Create(config, process)
 	if err != nil {
 		log.Fatalf("failed to exec: %s", err)
 	}
+	defer container.Destroy()
 
 	go func() {
 		resizeTty(master)

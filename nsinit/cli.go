@@ -7,16 +7,12 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-var logPath = os.Getenv("log")
+var logger *log.Logger
 
-func preload(context *cli.Context) error {
-	if logPath != "" {
-		if err := openLog(logPath); err != nil {
-			return err
-		}
-	}
+func preload(context *cli.Context) (err error) {
+	logger, err = openLog()
 
-	return nil
+	return err
 }
 
 func NsInit() {

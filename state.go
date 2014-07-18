@@ -26,6 +26,8 @@ func (s Status) String() string {
 		return "created"
 	case Running:
 		return "running"
+	case Resuming:
+		return "resuming"
 	case Pausing:
 		return "pausing"
 	case Paused:
@@ -48,6 +50,9 @@ const (
 
 	// The container exists and is running.
 	Running
+
+	// The container exists, it is int the process of being resumed
+	Resuming
 
 	// The container exists, it is in the process of being paused.
 	Pausing
