@@ -15,6 +15,8 @@ type linuxFactory struct {
 }
 
 // New returns the default factory for container creation in libcontainer
+// initArgs are the arguments passed during the reexec of the process with
+// the binary of the app to execute
 func New(initArgs []string) Factory {
 	return &linuxFactory{
 		initArgs: initArgs,
@@ -52,7 +54,8 @@ func (f *linuxFactory) Load(path string) (Container, error) {
 // StartInitialization loads a container by opening the pipe fd from the parent to read the configuration and state
 // This is a low level implementation detail of the reexec and should not be consumed externally
 func (f *linuxFactory) StartInitialization(pipefd uintptr) (err error) {
-	f.initialGlobalState()
+	runtime.LockOSThread()
+	label.Init()
 
 	// clear the current processes environment and load in the containers
 	os.Clearenv()
@@ -86,15 +89,4 @@ func (f *linuxFactory) StartInitialization(pipefd uintptr) (err error) {
 	container := newLinuxContainer(state.Config, state.State)
 
 	return container.initializeNamespace(state.Process)
-}
-
-func (f *linuxFactory) initialGlobalState() {
-	runtime.LockOSThread()
-	label.Init()
-}
-
-type initState struct {
-	Process *Process `json:"process,omitempty"`
-	Config  *Config        `json:"config,omitempty"`
-	State   *State         `json:"state,omitempty"`
 }

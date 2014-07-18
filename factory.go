@@ -7,9 +7,9 @@ type Factory interface {
 	// Returns the new container with a running process.
 	//
 	// Errors:
-	// Path already exists
-	// Config or initialConfig is invalid
-	// System error
+	// path already exists
+	// config or initialConfig is invalid
+	// system error
 	//
 	// On error, any partially created container parts are cleaned up (the operation is atomic).
 	Create(config *Config, initProcess *Process) (Container, error)
@@ -18,10 +18,18 @@ type Factory interface {
 	// from the state.
 	//
 	// Errors:
-	// Path does not exist
-	// Container is stopped
-	// System error
+	// path does not exist
+	// container is stopped
+	// system error
 	Load(path string) (Container, error)
 
+	// StartInitialization is an internal API to libcontainer used during the rexec of the
+	// container.  pipefd is the fd to the child end of the pipe used to syncronize the
+	// parent and child process providing state and configuration to the child process and
+	// returning any errors during the init of the container
+	//
+	// Errors:
+	// pipe connection error
+	// system error
 	StartInitialization(pipefd uintptr) error
 }

@@ -118,11 +118,13 @@ func (c *linuxContainer) Resume() error {
 
 func (c *linuxContainer) toggleCgroupFreezer(state cgroups.FreezerState) (err error) {
 	c.mux.Lock()
+
 	if systemd.UseSystemd() {
 		err = systemd.Freeze(c.config.Cgroups, state)
 	} else {
 		err = fs.Freeze(c.config.Cgroups, state)
 	}
+
 	c.mux.Unlock()
 
 	return err

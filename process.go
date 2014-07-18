@@ -2,7 +2,6 @@ package libcontainer
 
 import (
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"syscall"
@@ -12,7 +11,7 @@ import (
 	"github.com/docker/libcontainer/system"
 )
 
-// Configuration for a process to be run inside a container.
+// Process is the configuration and interaction for a process running inside a container
 type Process struct {
 	// The command to be run followed by any arguments.
 	Args []string `json:"args,omitempty"`
@@ -35,10 +34,10 @@ type Process struct {
 	// ExtraFiles are used to pass fds to the container's process
 	ExtraFiles []*os.File `json:"-"`
 
-	// master is the pty master file for the process
+	// Master is the pty master file for the process
 	Master *os.File `json:"-"`
 
-	// consolePath is the path to the pty slave for use by the master
+	// ConsolePath is the path to the pty slave for use by the master
 	ConsolePath string `json:"console_path,omitempty"`
 
 	cmd *exec.Cmd
@@ -48,8 +47,27 @@ type Process struct {
 	exitChan chan int
 }
 
-func (p *Process) ExitChan() chan int {
-	return p.exitChan
+// AllocatePty will create a new pty master and slave pair for the Process
+func (p *Process) AllocatePty() (*os.File, error) {
+	master, console, err := console.CreateMasterAndConsole()
+	if err != nil {
+		return nil, err
+	}
+
+	p.Master = master
+	p.ConsolePath = console
+
+	return master, nil
+}
+
+// Signal sends the specified signal to the process running inside the container
+func (p *Process) Signal(sig os.Signal) error {
+	return p.cmd.Process.Signal(sig)
+}
+
+// Wait waits for the process to die then returns the exit status
+func (p *Process) Wait() int {
+	return <-p.exitChan
 }
 
 // createCommand will create the *exec.Cmd with the provided path to libcontainer's init binary
@@ -60,7 +78,6 @@ func (p *Process) createCommand(initArgs []string, config *Config, pipe *syncpip
 	}
 
 	p.cmd = exec.Command(initArgs[0], append(initArgs[1:], p.Args...)...)
-	log.Println(p.cmd.Path, p.cmd.Args)
 	p.pipe = pipe
 
 	if p.ConsolePath == "" {
@@ -88,42 +105,23 @@ func (p *Process) createCommand(initArgs []string, config *Config, pipe *syncpip
 	return nil
 }
 
-// AllocatePty will create a new pty master and slave pair
-func (p *Process) AllocatePty() (*os.File, error) {
-	master, console, err := console.CreateMasterAndConsole()
-	if err != nil {
-		return nil, err
-	}
-
-	p.Master = master
-	p.ConsolePath = console
-
-	return master, nil
-}
-
-func (p *Process) Signal(sig os.Signal) error {
-	return p.cmd.Process.Signal(sig)
-}
-
-// Wait waits for the process to die then returns the exit status
-func (p *Process) Wait() int {
-	return <-p.exitChan
-}
-
 // startTime returns the processes start time
 func (p *Process) startTime() (string, error) {
 	return system.GetProcessStartTime(p.cmd.Process.Pid)
 }
 
+// pid returns the process's id
 func (p *Process) pid() int {
 	return p.cmd.Process.Pid
 }
 
+// kill sends a SIGKILL to the process then calls wait
 func (p *Process) kill() {
 	p.cmd.Process.Kill()
 	p.cmd.Wait()
 }
 
+// close closes any pipes and if the master pty was allocated on the process
 func (p *Process) close() error {
 	err := p.pipe.Close()
 
