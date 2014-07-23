@@ -1,0 +1,7 @@
+.*.swp
+*.orig
+.DS_Store
+*.o
+*.a
+*.so
+*.test
