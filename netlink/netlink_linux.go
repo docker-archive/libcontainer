@@ -38,6 +38,12 @@ type ifreqFlags struct {
 	Ifruflags uint16
 }
 
+type ifAddr struct {
+	Interface *net.Interface
+	IP        net.IP
+	IPNet     *net.IPNet
+}
+
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
@@ -650,30 +656,28 @@ func NetworkSetNsFd(iface *net.Interface, fd int) error {
 	return s.HandleAck(wb.Seq)
 }
 
-// Add an Ip address to an interface. This is identical to:
-// ip addr add $ip/$ipNet dev $iface
-func NetworkLinkAddIp(iface *net.Interface, ip net.IP, ipNet *net.IPNet) error {
+func networkLinkAction(action, flags int, ifa ifAddr) error {
 	s, err := getNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	family := getIpFamily(ip)
+	family := getIpFamily(ifa.IP)
 
-	wb := newNetlinkRequest(syscall.RTM_NEWADDR, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+	wb := newNetlinkRequest(action, flags)
 
 	msg := newIfAddrmsg(family)
-	msg.Index = uint32(iface.Index)
-	prefixLen, _ := ipNet.Mask.Size()
+	msg.Index = uint32(ifa.Interface.Index)
+	prefixLen, _ := ifa.IPNet.Mask.Size()
 	msg.Prefixlen = uint8(prefixLen)
 	wb.AddData(msg)
 
 	var ipData []byte
 	if family == syscall.AF_INET {
-		ipData = ip.To4()
+		ipData = ifa.IP.To4()
 	} else {
-		ipData = ip.To16()
+		ipData = ifa.IP.To16()
 	}
 
 	localData := newRtAttr(syscall.IFA_LOCAL, ipData)
@@ -687,6 +691,26 @@ func NetworkLinkAddIp(iface *net.Interface, ip net.IP, ipNet *net.IPNet) error {
 	}
 
 	return s.HandleAck(wb.Seq)
+}
+
+// Remove an IP address from an interface. This is identical to:
+// ip addr del $ip/$ipNet dev $iface
+func NetworkLinkRemIp(iface *net.Interface, ip net.IP, ipNet *net.IPNet) error {
+	return networkLinkAction(
+		syscall.RTM_DELADDR,
+		syscall.NLM_F_ACK,
+		ifAddr{iface, ip, ipNet},
+	)
+}
+
+// Add an Ip address to an interface. This is identical to:
+// ip addr add $ip/$ipNet dev $iface
+func NetworkLinkAddIp(iface *net.Interface, ip net.IP, ipNet *net.IPNet) error {
+	return networkLinkAction(
+		syscall.RTM_NEWADDR,
+		syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK,
+		ifAddr{iface, ip, ipNet},
+	)
 }
 
 func zeroTerminated(s string) []byte {
