@@ -51,6 +51,16 @@ func (v *Veth) Create(n *Network, nspid int, networkState *NetworkState) error {
 
 func (v *Veth) Initialize(config *Network, networkState *NetworkState) error {
 	var vethChild = networkState.VethChild
+	var gateways = []string{}
+	gatewayInList := func(gateway string) bool {
+		for _, gw := range gateways {
+			if gateway == gw {
+				return true
+			}
+		}
+		return false
+	}
+
 	if vethChild == "" {
 		return fmt.Errorf("vethChild is not specified")
 	}
@@ -60,8 +70,14 @@ func (v *Veth) Initialize(config *Network, networkState *NetworkState) error {
 	if err := ChangeInterfaceName(vethChild, defaultDevice); err != nil {
 		return fmt.Errorf("change %s to %s %s", vethChild, defaultDevice, err)
 	}
-	if err := SetInterfaceIp(defaultDevice, config.Address); err != nil {
-		return fmt.Errorf("set %s ip %s", defaultDevice, err)
+	for _, addr := range config.Addresses {
+		if err := SetInterfaceIp(defaultDevice, addr.Address); err != nil {
+			return fmt.Errorf("set %s ip %s", defaultDevice, err)
+		}
+		//TODO(ajw) How do we handle multiple default gateways?
+		if !gatewayInList(addr.Gateway) {
+			gateways = append(gateways, addr.Gateway)
+		}
 	}
 	if err := SetMtu(defaultDevice, config.Mtu); err != nil {
 		return fmt.Errorf("set %s mtu to %d %s", defaultDevice, config.Mtu, err)
@@ -69,9 +85,9 @@ func (v *Veth) Initialize(config *Network, networkState *NetworkState) error {
 	if err := InterfaceUp(defaultDevice); err != nil {
 		return fmt.Errorf("%s up %s", defaultDevice, err)
 	}
-	if config.Gateway != "" {
-		if err := SetDefaultGateway(config.Gateway, defaultDevice); err != nil {
-			return fmt.Errorf("set gateway to %s on device %s failed with %s", config.Gateway, defaultDevice, err)
+	for _, gw := range gateways {
+		if err := SetDefaultGateway(gw, defaultDevice); err != nil {
+			return fmt.Errorf("set gateway to %s on device %s failed with %s", gw, defaultDevice, err)
 		}
 	}
 	return nil

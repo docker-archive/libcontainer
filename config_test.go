@@ -158,3 +158,46 @@ func TestSelinuxLabels(t *testing.T) {
 		t.Fatalf("expected mount label %q but received %q", label, container.MountConfig.MountLabel)
 	}
 }
+
+func TestMultipleAddresses(t *testing.T) {
+	container, err := loadConfig("multiple_addresses_one_interface.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, n := range container.Networks {
+		if n.Type == "veth" {
+			if n.Address != "" {
+				t.Logf("veth deprecated address should be '' but received %q", n.Address)
+				t.Fail()
+			}
+
+			if n.Gateway != "" {
+				t.Logf("veth deprecated gateway should be '' but received %q", n.Gateway)
+				t.Fail()
+			}
+
+			if n.Addresses[0].Address != "172.17.0.101/16" {
+				t.Logf("veth gateway should be 172.17.0.101/16 but received %q", n.Addresses[0].Address)
+				t.Fail()
+			}
+
+			if n.Addresses[0].Gateway != "172.17.42.1" {
+				t.Logf("veth gateway should be 172.17.42.1 but received %q", n.Addresses[0].Gateway)
+				t.Fail()
+			}
+
+			if n.Addresses[1].Address != "2001:db8::100/64" {
+				t.Logf("veth gateway address be 2001:db8::100/64 but received %q", n.Addresses[1].Address)
+				t.Fail()
+			}
+
+			if n.Addresses[1].Gateway != "2001:db8::1" {
+				t.Logf("veth gateway should be 2001:db8::1 but received %q", n.Addresses[1].Gateway)
+				t.Fail()
+			}
+
+			break
+		}
+	}
+}
