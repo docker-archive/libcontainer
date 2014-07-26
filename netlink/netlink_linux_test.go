@@ -7,6 +7,10 @@ import (
 )
 
 func TestAddRemNetworkIp(t *testing.T) {
+	if testing.Short() {
+		return
+	}
+
 	var err error
 
 	ifaceString := "lo"
