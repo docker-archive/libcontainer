@@ -11,7 +11,7 @@ import (
 func Execv(cmd string, args []string, env []string) error {
 	name, err := exec.LookPath(cmd)
 	if err != nil {
-		return err
+		return exec.ErrNotFound
 	}
 
 	return syscall.Exec(name, args, env)
