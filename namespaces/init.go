@@ -5,6 +5,7 @@ package namespaces
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"syscall"
@@ -30,7 +31,8 @@ import (
 // and other options required for the new container.
 func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, syncPipe *syncpipe.SyncPipe, args []string) (err error) {
 	defer func() {
-		if err != nil {
+		// ErrNotFound is a system error and should not be returned to the parent
+		if err != nil && err != exec.ErrNotFound {
 			syncPipe.ReportChildError(err)
 		}
 	}()
