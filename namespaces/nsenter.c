@@ -27,13 +27,15 @@ int get_args(int fd, int *argc, char ***argv)
 	do {
 		contents_size += kBufSize;
 		tmp = (char *)realloc(contents, contents_size);
-		if (!tmp)
-			goto on_error;
+		if (!tmp) {
+			goto on_error;	
+		}
 
 		contents = tmp;
 		bytes_read = read(fd, contents + contents_offset, contents_size - contents_offset);
-		if (bytes_read < 0)
+		if (bytes_read < 0) {
 			goto on_error;
+		}
 
 		contents_offset += bytes_read;
 	} while (bytes_read > 0);
@@ -49,8 +51,9 @@ int get_args(int fd, int *argc, char ***argv)
 		}
 	}
 	tmp = (char *)realloc(*argv, sizeof(char *) * ((*argc) + 1));
-	if (!tmp)
+	if (!tmp) {
 		goto on_error;
+	}
 	*argv = (char **)tmp;
 
 	for (; idx < (*argc); idx++) {
@@ -62,8 +65,9 @@ int get_args(int fd, int *argc, char ***argv)
 
 on_error:
 	fprintf(stderr, "nsenter: Failed reading commandline with error: \"%s\"\n", strerror(errno));
-	if (contents)
+	if (contents) {
 		free(contents);
+	}
 	return -1;
 }
 
@@ -138,12 +142,15 @@ void nsenter()
 			// Append any additional args.
 			fd = strtol(optarg, &argend, 10);
 			if (fd == LONG_MIN || fd == LONG_MAX ||
-				argend == optarg || *argend != '\0' ||
-				get_args(fd, &argc, &argv))
+				argend == optarg || *argend != '\0') {
+				fprintf(stderr, "nsenter: Invalid config file\n");
 				exit(1);
+			}
 			break;
 		case ':':
-			fprintf(stderr, "nsenter: Required argument missing for option '-%c'\n", (char)optopt);
+			fprintf(stderr,
+					"nsenter: Required argument missing for option '-%c'\n",
+					(char)optopt);
 			print_usage();
 			exit(1);
 			break;
@@ -165,7 +172,9 @@ void nsenter()
 	if (init_pid == LONG_MIN || init_pid == LONG_MAX ||
 		argend == init_pid_str || *argend != '\0' ||
 		init_pid <= 0) {
-		fprintf(stderr, "nsenter: Failed to parse PID from \"%s\" with error: \"%s\"\n", init_pid_str, strerror(errno));
+		fprintf(stderr,
+				"nsenter: Failed to parse PID from \"%s\" with error: \"%s\"\n",
+				init_pid_str, strerror(errno));
 		print_usage();
 		exit(1);
 	}
@@ -174,7 +183,7 @@ void nsenter()
 	argv += 3;
 
 	if (setsid() == -1) {
-		fprintf(stderr, "setsid failed. Error: %s\n", strerror(errno));
+		fprintf(stderr, "nsenter: Failed to setsid \"%s\"\n", strerror(errno));
 		exit(1);
 	}
 
@@ -184,7 +193,7 @@ void nsenter()
 		consolefd = open(console, O_RDWR);
 		if (consolefd < 0) {
 			fprintf(stderr,
-					"nsenter: failed to open console %s %s\n",
+					"nsenter: Failed to open console %s %s\n",
 					console, strerror(errno));
 			exit(1);
 		}
@@ -229,17 +238,17 @@ void nsenter()
 	if (child == 0) {
 		if (consolefd != -1) {
 			if (dup2(consolefd, STDIN_FILENO) != 0) {
-				fprintf(stderr, "nsenter: failed to dup 0 %s\n",
+				fprintf(stderr, "nsenter: Failed to dup 0 %s\n",
 						strerror(errno));
 				exit(1);
 			}
 			if (dup2(consolefd, STDOUT_FILENO) != STDOUT_FILENO) {
-				fprintf(stderr, "nsenter: failed to dup 1 %s\n",
+				fprintf(stderr, "nsenter: Failed to dup 1 %s\n",
 						strerror(errno));
 				exit(1);
 			}
 			if (dup2(consolefd, STDERR_FILENO) != STDERR_FILENO) {
-				fprintf(stderr, "nsenter: failed to dup 2 %s\n",
+				fprintf(stderr, "nsenter: Failed to dup 2 %s\n",
 						strerror(errno));
 				exit(1);
 			}
