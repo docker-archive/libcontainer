@@ -87,7 +87,7 @@ int setns(int fd, int nstype)
 void print_usage()
 {
 	fprintf(stderr,
-			"Usage: <binary> nsenter --nspid <pid> --config <pipe_fd> --containerjson <container_json> -- cmd1 arg1 arg2...\n");
+		"Usage: <binary> nsenter --nspid <pid> --config <pipe_fd> --containerjson <container_json> -- cmd1 arg1 arg2...\n");
 }
 
 void nsenter()
@@ -149,8 +149,8 @@ void nsenter()
 			break;
 		case ':':
 			fprintf(stderr,
-					"nsenter: Required argument missing for option '-%c'\n",
-					(char)optopt);
+				"nsenter: Required argument missing for option '-%c'\n",
+				(char)optopt);
 			print_usage();
 			exit(1);
 			break;
@@ -173,8 +173,8 @@ void nsenter()
 		argend == init_pid_str || *argend != '\0' ||
 		init_pid <= 0) {
 		fprintf(stderr,
-				"nsenter: Failed to parse PID from \"%s\" with error: \"%s\"\n",
-				init_pid_str, strerror(errno));
+			"nsenter: Failed to parse PID from \"%s\" with error: \"%s\"\n",
+			init_pid_str, strerror(errno));
 		print_usage();
 		exit(1);
 	}
@@ -193,8 +193,8 @@ void nsenter()
 		consolefd = open(console, O_RDWR);
 		if (consolefd < 0) {
 			fprintf(stderr,
-					"nsenter: Failed to open console %s %s\n",
-					console, strerror(errno));
+				"nsenter: Failed to open console %s %s\n",
+				console, strerror(errno));
 			exit(1);
 		}
 	}
@@ -218,16 +218,16 @@ void nsenter()
 				continue;
 
 			fprintf(stderr,
-					"nsenter: Failed to open ns file \"%s\" for ns \"%s\" with error: \"%s\"\n",
-					buf, namespaces[i], strerror(errno));
+				"nsenter: Failed to open ns file \"%s\" for ns \"%s\" with error: \"%s\"\n",
+				buf, namespaces[i], strerror(errno));
 			exit(1);
 		}
 
 		// Set the namespace.
 		if (setns(fd, 0) == -1) {
 			fprintf(stderr,
-					"nsenter: Failed to setns for \"%s\" with error: \"%s\"\n",
-					namespaces[i], strerror(errno));
+				"nsenter: Failed to setns for \"%s\" with error: \"%s\"\n",
+				namespaces[i], strerror(errno));
 			exit(1);
 		}
 		close(fd);
@@ -239,17 +239,17 @@ void nsenter()
 		if (consolefd != -1) {
 			if (dup2(consolefd, STDIN_FILENO) != 0) {
 				fprintf(stderr, "nsenter: Failed to dup 0 %s\n",
-						strerror(errno));
+					strerror(errno));
 				exit(1);
 			}
 			if (dup2(consolefd, STDOUT_FILENO) != STDOUT_FILENO) {
 				fprintf(stderr, "nsenter: Failed to dup 1 %s\n",
-						strerror(errno));
+					strerror(errno));
 				exit(1);
 			}
 			if (dup2(consolefd, STDERR_FILENO) != STDERR_FILENO) {
 				fprintf(stderr, "nsenter: Failed to dup 2 %s\n",
-						strerror(errno));
+					strerror(errno));
 				exit(1);
 			}
 		}
@@ -261,8 +261,8 @@ void nsenter()
 		int status = 0;
 		if (waitpid(child, &status, 0) == -1) {
 			fprintf(stderr,
-					"nsenter: Failed to waitpid with error: \"%s\"\n",
-					strerror(errno));
+				"nsenter: Failed to waitpid with error: \"%s\"\n",
+				strerror(errno));
 			exit(1);
 		}
 
