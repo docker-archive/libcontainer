@@ -14,16 +14,26 @@
 #include <unistd.h>
 #include <getopt.h>
 
+static const char *kNsEnter = "nsenter";
 static const kBufSize = 4096;
 
-int get_args(int fd, int *argc, char ***argv)
+int get_args(int *argc, char ***argv)
 {
 	// Read the whole commandline.
 	ssize_t contents_size = 0;
 	ssize_t contents_offset = 0;
 	char *contents = NULL, *tmp;
 	ssize_t bytes_read = 0;
-	int idx = *argc;
+	int idx, fd;
+
+	*argc = 0;
+	*argv = NULL;
+
+	fd = open("/proc/self/cmdline", O_RDONLY);
+	if (fd < 0) {
+		goto on_error;
+	}
+
 	do {
 		contents_size += kBufSize;
 		tmp = (char *)realloc(contents, contents_size);
@@ -40,6 +50,7 @@ int get_args(int fd, int *argc, char ***argv)
 		contents_offset += bytes_read;
 	} while (bytes_read > 0);
 	close(fd);
+	fd = -1;
 
 	// Parse the commandline into an argv.
 	// /proc/self/cmdline or argfile should be \0 delimited.
@@ -50,13 +61,13 @@ int get_args(int fd, int *argc, char ***argv)
 			(*argc)++;
 		}
 	}
-	tmp = (char *)realloc(*argv, sizeof(char *) * ((*argc) + 1));
+	tmp = (char *)malloc(sizeof(char *) * ((*argc) + 1));
 	if (!tmp) {
 		goto on_error;
 	}
 	*argv = (char **)tmp;
 
-	for (; idx < (*argc); idx++) {
+	for (idx = 0; idx < (*argc); idx++) {
 		(*argv)[idx] = contents;
 		contents += strlen(contents) + 1;
 	}
@@ -67,6 +78,9 @@ on_error:
 	fprintf(stderr, "nsenter: Failed reading commandline with error: \"%s\"\n", strerror(errno));
 	if (contents) {
 		free(contents);
+	}
+	if (fd >= 0) {
+		close(fd);
 	}
 	return -1;
 }
@@ -92,23 +106,26 @@ void print_usage()
 
 void nsenter()
 {
-	int argc = 0;
+	int argc = 0, c;
 	char **argv = NULL;
-	int fd;
 
-	fd = open("/proc/self/cmdline", O_RDONLY);
-	if (fd < 0)
-		exit(1);
-
-	if (get_args(fd, &argc, &argv)) {
-		close(fd);
+	if (get_args(&argc, &argv)) {
 		exit(1);
 	}
-	close(fd);
 
 	// Ignore if this is not for us.
-	if (argc < 6 || strcmp(argv[1], "nsenter") != 0) {
+	if (argc < 6) {
 		return;
+	}
+	int found_nsenter = 0;
+	for (c = 0; c < argc; ++c) {
+		if (strcmp(argv[c], kNsEnter) == 0) {
+			found_nsenter = 1;
+			break;
+		}
+	}
+	if (!found_nsenter) {
+ 		return;
 	}
 
 	static const struct option longopts[] = {
@@ -119,7 +136,6 @@ void nsenter()
 		{ NULL,            0,                 NULL,  0  }
 	};
 
-	int c;
 	pid_t init_pid = -1;
 	char *init_pid_str = NULL;
 	char *container_json = NULL;
@@ -139,12 +155,14 @@ void nsenter()
 			console = optarg;
 			break;
 		case 'F':
-			// Append any additional args.
-			fd = strtol(optarg, &argend, 10);
-			if (fd == LONG_MIN || fd == LONG_MAX ||
-				argend == optarg || *argend != '\0') {
-				fprintf(stderr, "nsenter: Invalid config file\n");
-				exit(1);
+			// Validate pipe fd. 
+			{
+				int fd = strtol(optarg, &argend, 10);
+				if ((fd == 0 && errno == EINVAL) || errno == ERANGE ||
+					argend == optarg || *argend != '\0') {
+					fprintf(stderr, "nsenter: Invalid config file\n");
+					exit(1);
+				}
 			}
 			break;
 		case ':':
@@ -169,7 +187,7 @@ void nsenter()
 	}
 
 	init_pid = strtol(init_pid_str, &argend, 10);
-	if (init_pid == LONG_MIN || init_pid == LONG_MAX ||
+	if ((init_pid == 0 && errno == EINVAL) || errno == ERANGE ||
 		argend == init_pid_str || *argend != '\0' ||
 		init_pid <= 0) {
 		fprintf(stderr,
