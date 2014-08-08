@@ -53,6 +53,7 @@ func (s *CpuacctGroup) GetStats(path string, stats *cgroups.Stats) error {
 	if startUsage, err = getCgroupParamInt(path, "cpuacct.usage"); err != nil {
 		return err
 	}
+	startPercpuUsage, err := getPercpuUsage(path)
 	// sample for 100ms
 	time.Sleep(100 * time.Millisecond)
 	if kernelModeUsage, userModeUsage, err = getCpuUsage(path); err != nil {
@@ -71,7 +72,11 @@ func (s *CpuacctGroup) GetStats(path string, stats *cgroups.Stats) error {
 		deltaProc   = lastCpu - startCpu
 		deltaSystem = lastSystem - startSystem
 		deltaUsage  = lastUsage - startUsage
+		ratioPercpu = make([]float64, len(startPercpuUsage))
 	)
+	for i, c := range startPercpuUsage {
+		ratioPercpu[i] = float64(c) / float64(lastUsage) * 100
+	}
 	if deltaSystem > 0.0 {
 		percentage = ((deltaProc / deltaSystem) * clockTicks) * cpuCount
 	}
@@ -85,6 +90,7 @@ func (s *CpuacctGroup) GetStats(path string, stats *cgroups.Stats) error {
 		return err
 	}
 	stats.CpuStats.CpuUsage.TotalUsage = lastUsage
+	stats.CpuStats.CpuUsage.RatioPercpu = ratioPercpu
 	stats.CpuStats.CpuUsage.PercpuUsage = percpuUsage
 	stats.CpuStats.CpuUsage.UsageInKernelmode = (kernelModeUsage * nanosecondsInSecond) / clockTicks
 	stats.CpuStats.CpuUsage.UsageInUsermode = (userModeUsage * nanosecondsInSecond) / clockTicks
