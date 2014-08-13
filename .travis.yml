@@ -14,6 +14,7 @@ env:
 
 install:
     - go get code.google.com/p/go.tools/cmd/cover
+    - go get code.google.com/p/go.tools/cmd/vet
     - mkdir -pv "${GOPATH%%:*}/src/github.com/docker" && [ -d "${GOPATH%%:*}/src/github.com/docker/libcontainer" ] || ln -sv "$(readlink -f .)" "${GOPATH%%:*}/src/github.com/docker/libcontainer"
     - if [ -z "$TRAVIS_GLOBAL_WTF" ]; then
           gvm cross "$_GOOS" "$_GOARCH";
@@ -32,5 +33,6 @@ install:
 script:
     - if [ "$TRAVIS_GLOBAL_WTF" ]; then bash "$DOCKER_PATH/hack/make/validate-dco"; fi
     - if [ "$TRAVIS_GLOBAL_WTF" ]; then bash "$DOCKER_PATH/hack/make/validate-gofmt"; fi
+    - if [ "$TRAVIS_GLOBAL_WTF" ]; then go vet ./...; fi
     - if [ -z "$TRAVIS_GLOBAL_WTF" ]; then make direct-build; fi
     - if [ -z "$TRAVIS_GLOBAL_WTF" -a "$GOARCH" != 'arm' ]; then make direct-test-short; fi
