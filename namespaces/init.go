@@ -17,6 +17,7 @@ import (
 	"github.com/docker/libcontainer/network"
 	"github.com/docker/libcontainer/security/capabilities"
 	"github.com/docker/libcontainer/security/restrict"
+	"github.com/docker/libcontainer/security/seccomp"
 	"github.com/docker/libcontainer/syncpipe"
 	"github.com/docker/libcontainer/system"
 	"github.com/docker/libcontainer/user"
@@ -106,6 +107,10 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, syn
 	pdeathSignal, err := system.GetParentDeathSignal()
 	if err != nil {
 		return fmt.Errorf("get parent death signal %s", err)
+	}
+
+	if err := seccomp.InitSeccomp(container.RestrictSyscalls); err != nil {
+		return fmt.Errorf("initializing seccomp %s", err)
 	}
 
 	if err := FinalizeNamespace(container); err != nil {

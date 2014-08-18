@@ -65,6 +65,9 @@ type Config struct {
 	// RestrictSys will remount /proc/sys, /sys, and mask over sysrq-trigger as well as /proc/irq and
 	// /proc/bus
 	RestrictSys bool `json:"restrict_sys,omitempty"`
+
+	// Syscalls which will be restricted on container start
+	RestrictSyscalls []string `json:"restrict_syscalls,omitempty"`
 }
 
 // Routes can be specified to create entries in the route table as the container is started

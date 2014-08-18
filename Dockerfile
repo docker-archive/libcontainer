@@ -1,6 +1,6 @@
 FROM crosbymichael/golang
 
-RUN apt-get update && apt-get install -y gcc make
+RUN apt-get update && apt-get install -y gcc make libseccomp2 libseccomp-dev
 RUN go get code.google.com/p/go.tools/cmd/cover
 
 ENV GOPATH $GOPATH:/go/src/github.com/docker/libcontainer/vendor
