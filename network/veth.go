@@ -16,7 +16,7 @@ type Veth struct {
 
 const defaultDevice = "eth0"
 
-func (v *Veth) Create(n *Network, nspid int, networkState *NetworkState) error {
+func (v *Veth) Create(n *Network, networkState *NetworkState) error {
 	var (
 		bridge = n.Bridge
 		prefix = n.VethPrefix
@@ -40,7 +40,7 @@ func (v *Veth) Create(n *Network, nspid int, networkState *NetworkState) error {
 	if err := InterfaceUp(name1); err != nil {
 		return err
 	}
-	if err := SetInterfaceInNamespacePid(name2, nspid); err != nil {
+	if err := SetInterfaceInNamespaceFd(name2, uintptr(n.NetnsFd)); err != nil {
 		return err
 	}
 	networkState.VethHost = name1

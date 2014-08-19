@@ -72,7 +72,7 @@ func Exec(container *libcontainer.Config, stdin io.Reader, stdout, stderr io.Wri
 	}
 
 	var networkState network.NetworkState
-	if err := InitializeNetworking(container, command.Process.Pid, syncPipe, &networkState); err != nil {
+	if err := InitializeNetworking(container, syncPipe, &networkState); err != nil {
 		command.Process.Kill()
 		command.Wait()
 		return -1, err
@@ -173,13 +173,13 @@ func SetupCgroups(container *libcontainer.Config, nspid int) (cgroups.ActiveCgro
 
 // InitializeNetworking creates the container's network stack outside of the namespace and moves
 // interfaces into the container's net namespaces if necessary
-func InitializeNetworking(container *libcontainer.Config, nspid int, pipe *syncpipe.SyncPipe, networkState *network.NetworkState) error {
+func InitializeNetworking(container *libcontainer.Config, pipe *syncpipe.SyncPipe, networkState *network.NetworkState) error {
 	for _, config := range container.Networks {
 		strategy, err := network.GetStrategy(config.Type)
 		if err != nil {
 			return err
 		}
-		if err := strategy.Create((*network.Network)(config), nspid, networkState); err != nil {
+		if err := strategy.Create((*network.Network)(config), networkState); err != nil {
 			return err
 		}
 	}
