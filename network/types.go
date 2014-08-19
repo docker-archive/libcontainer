@@ -8,8 +8,8 @@ type Network struct {
 	// Type sets the networks type, commonly veth and loopback
 	Type string `json:"type,omitempty"`
 
-	// Path to network namespace
-	NsPath string `json:"ns_path,omitempty"`
+	// NetnsFd is file descriptor of network namespace
+	NetnsFd int `json:"ns_path,omitempty"`
 
 	// The bridge to use.
 	Bridge string `json:"bridge,omitempty"`
@@ -36,6 +36,6 @@ type NetworkState struct {
 	VethHost string `json:"veth_host,omitempty"`
 	// The name of the veth interface created inside the container for the child.
 	VethChild string `json:"veth_child,omitempty"`
-	// Net namespace path.
-	NsPath string `json:"ns_path,omitempty"`
+	// NetnsFd is file descriptor of network namespace
+	NetnsFd int `json:"ns_path,omitempty"`
 }
