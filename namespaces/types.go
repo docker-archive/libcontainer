@@ -15,9 +15,9 @@ type (
 // into the names of the files located in /proc/<pid>/ns/* for
 // each namespace
 var (
-	namespaceList      = Namespaces{}
-	ErrUnkownNamespace = errors.New("Unknown namespace")
-	ErrUnsupported     = errors.New("Unsupported method")
+	namespaceList       = Namespaces{}
+	ErrUnknownNamespace = errors.New("Unknown namespace")
+	ErrUnsupported      = errors.New("Unsupported method")
 )
 
 func (ns *Namespace) String() string {

@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/docker/libcontainer/netlink"
+	"github.com/docker/libcontainer/utils"
 )
 
 func InterfaceUp(name string) error {
@@ -50,6 +51,18 @@ func SetInterfaceInNamespaceFd(name string, fd uintptr) error {
 		return err
 	}
 	return netlink.NetworkSetNsFd(iface, int(fd))
+}
+
+func SetInterfaceInNamespacePath(name, path string) error {
+	iface, err := net.InterfaceByName(name)
+	if err != nil {
+		return err
+	}
+	nsFd, err := utils.GetFd(path)
+	if err != nil {
+		return err
+	}
+	return netlink.NetworkSetNsFd(iface, int(nsFd))
 }
 
 func SetInterfaceMaster(name, master string) error {
