@@ -487,6 +487,12 @@ func AddDefaultGw(ip, device string) error {
 	return AddRoute("", "", ip, device)
 }
 
+// Replace default gateway. Identical to:
+// ip route replace default via $ip
+func ReplaceDefaultGw(ip, device string) error {
+	return ReplaceRoute("", "", ip, device)
+}
+
 // Bring up a particular network interface
 func NetworkLinkUp(iface *net.Interface) error {
 	s, err := getNetlinkSocket()
