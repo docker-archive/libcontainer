@@ -368,15 +368,20 @@ done:
 
 // Add a new route table entry.
 func AddRoute(destination, source, gateway, device string) error {
-	return addRoute(destination, source, gateway, device, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+	return manageRoute(destination, source, gateway, device, syscall.RTM_NEWROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
 }
 
 // Replace route table entry.
 func ReplaceRoute(destination, source, gateway, device string) error {
-	return addRoute(destination, source, gateway, device, syscall.NLM_F_CREATE|syscall.NLM_F_REPLACE|syscall.NLM_F_ACK)
+	return manageRoute(destination, source, gateway, device, syscall.RTM_NEWROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_REPLACE|syscall.NLM_F_ACK)
 }
 
-func addRoute(destination, source, gateway, device string, flags int) error {
+// Delete route table entry.
+func DeleteRoute(destination, source, gateway, device string) error {
+	return manageRoute(destination, source, gateway, device, syscall.RTM_DELROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_REPLACE|syscall.NLM_F_ACK)
+}
+
+func manageRoute(destination, source, gateway, device string, action int, flags int) error {
 	if destination == "" && source == "" && gateway == "" {
 		return fmt.Errorf("one of destination, source or gateway must not be blank")
 	}
@@ -387,7 +392,7 @@ func addRoute(destination, source, gateway, device string, flags int) error {
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWROUTE, flags)
+	wb := newNetlinkRequest(action, flags)
 	msg := newRtMsg()
 	currentFamily := -1
 	var rtAttrs []*RtAttr
