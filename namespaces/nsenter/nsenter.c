@@ -93,6 +93,7 @@ void nsenter()
 		{"console", required_argument, NULL, 't'},
 		{"netns", required_argument, NULL, 'e'},
 		{"mntns", required_argument, NULL, 'm'},
+		{"nosetsid", 0, NULL, 's'},
 		{NULL, 0, NULL, 0}
 	};
     
@@ -101,6 +102,7 @@ void nsenter()
 	char *console = NULL;
 	char *netns = NULL;
 	char *mntns = NULL;
+	int nosetsid = 0;
 	while ((c = getopt_long_only(argc, argv, "n:c:e:m:s", longopts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
@@ -115,14 +117,20 @@ void nsenter()
 		case 'm':
 			mntns = optarg;
 			break;
+		case 's':
+			nosetsid = 1;
+			break;
+		}
 	}
 
 	argc -= 3;
 	argv += 3;
 
-	if (setsid() == -1) {
-		fprintf(stderr, "setsid failed. Error: %s\n", strerror(errno));
-		exit(1);
+	if (!nosetsid) {
+		if (setsid() == -1) {
+			fprintf(stderr, "setsid failed. Error: %s\n", strerror(errno));
+			exit(1);
+		}
 	}
 	// before we setns we need to dup the console
 	int consolefd = -1;
