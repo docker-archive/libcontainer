@@ -377,6 +377,20 @@ outer:
 
 // Add a new route table entry.
 func AddRoute(destination, source, gateway, device string) error {
+	return manageRoute(destination, source, gateway, device, syscall.RTM_NEWROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+}
+
+// Replace route table entry.
+func ReplaceRoute(destination, source, gateway, device string) error {
+	return manageRoute(destination, source, gateway, device, syscall.RTM_NEWROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_REPLACE|syscall.NLM_F_ACK)
+}
+
+// Delete route table entry.
+func DeleteRoute(destination, source, gateway, device string) error {
+	return manageRoute(destination, source, gateway, device, syscall.RTM_DELROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_REPLACE|syscall.NLM_F_ACK)
+}
+
+func manageRoute(destination, source, gateway, device string, action int, flags int) error {
 	if destination == "" && source == "" && gateway == "" {
 		return fmt.Errorf("one of destination, source or gateway must not be blank")
 	}
@@ -387,7 +401,7 @@ func AddRoute(destination, source, gateway, device string) error {
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+	wb := newNetlinkRequest(action, flags)
 	msg := newRtMsg()
 	currentFamily := -1
 	var rtAttrs []*RtAttr
@@ -479,6 +493,12 @@ func AddRoute(destination, source, gateway, device string) error {
 // ip route add default via $ip
 func AddDefaultGw(ip, device string) error {
 	return AddRoute("", "", ip, device)
+}
+
+// Replace default gateway. Identical to:
+// ip route replace default via $ip
+func ReplaceDefaultGw(ip, device string) error {
+	return ReplaceRoute("", "", ip, device)
 }
 
 // Bring up a particular network interface
@@ -806,8 +826,8 @@ outer:
 				continue
 			}
 
-			if msg.Family != syscall.AF_INET {
-				// Ignore non-ipv4 routes
+			if msg.Family != syscall.AF_INET && msg.Family != syscall.AF_INET6 {
+				// Ignore non-ipv4 and non-ipv6 routes
 				continue
 			}
 
@@ -822,7 +842,7 @@ outer:
 			}
 			for _, attr := range attrs {
 				switch attr.Attr.Type {
-				case syscall.RTA_DST:
+				case syscall.RTA_DST, syscall.RTA_GATEWAY:
 					ip := attr.Value
 					r.IPNet = &net.IPNet{
 						IP:   ip,
