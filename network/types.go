@@ -1,5 +1,14 @@
 package network
 
+// Address defines an IP address / Gateway pair
+type NetworkAddress struct {
+	// Address contains the IP and mask to set on the network interface
+	Address string `json:"address,omitempty"`
+
+	// Gateway sets the gateway address that is used as the default for the interface
+	Gateway string `json:"gateway,omitempty"`
+}
+
 // Network defines configuration for a container's networking stack
 //
 // The network configuration can be omited from a container causing the
@@ -18,10 +27,13 @@ type Network struct {
 	VethPrefix string `json:"veth_prefix,omitempty"`
 
 	// Address contains the IP and mask to set on the network interface
-	Address string `json:"address,omitempty"`
+	Address string `json:"address,omitempty"` // DEPRECATED: See Addresses below
 
 	// Gateway sets the gateway address that is used as the default for the interface
-	Gateway string `json:"gateway,omitempty"`
+	Gateway string `json:"gateway,omitempty"` // DEPRECATED: See Addresses below
+
+	// Addresses defines a list of Address/Gateways to set on the interface
+	Addresses []*NetworkAddress `json:"addresses,omitempty"`
 
 	// Mtu sets the mtu value for the interface and will be mirrored on both the host and
 	// container's interfaces if a pair is created, specifically in the case of type veth
