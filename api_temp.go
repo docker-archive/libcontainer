@@ -5,7 +5,6 @@ package libcontainer
 
 import (
 	"github.com/docker/libcontainer/cgroups/fs"
-	"github.com/docker/libcontainer/cgroups/systemd"
 	"github.com/docker/libcontainer/network"
 )
 
@@ -18,12 +17,8 @@ func GetStats(container *Config, state *State) (*ContainerStats, error) {
 		stats = &ContainerStats{}
 	)
 
-	if systemd.UseSystemd() {
-		stats.CgroupStats, err = systemd.GetStats(container.Cgroups)
-	} else {
-		stats.CgroupStats, err = fs.GetStats(container.Cgroups)
-	}
-
+	// TODO(vmarmol): The cgroups are in the state, use that rather than discovering them each time.
+	stats.CgroupStats, err = fs.GetStats(container.Cgroups)
 	if err != nil {
 		return stats, err
 	}
