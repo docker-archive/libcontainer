@@ -32,8 +32,8 @@ func ChangeInterfaceName(old, newName string) error {
 	return netlink.NetworkChangeName(iface, newName)
 }
 
-func CreateVethPair(name1, name2 string) error {
-	return netlink.NetworkCreateVethPair(name1, name2)
+func CreateVethPair(name1, name2 string, txQueLen int) error {
+	return netlink.NetworkCreateVethPair(name1, name2, txQueLen)
 }
 
 func SetInterfaceInNamespacePid(name string, nsPid int) error {
