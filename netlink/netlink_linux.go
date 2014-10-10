@@ -681,7 +681,7 @@ func NetworkChangeName(iface *net.Interface, newName string) error {
 
 // Add a new VETH pair link on the host
 // This is identical to running: ip link add name $name type veth peer name $peername
-func NetworkCreateVethPair(name1, name2 string) error {
+func NetworkCreateVethPair(name1, name2 string, txQueueLen int) error {
 	s, err := getNetlinkSocket()
 	if err != nil {
 		return err
@@ -697,7 +697,7 @@ func NetworkCreateVethPair(name1, name2 string) error {
 	wb.AddData(nameData)
 
 	txqLen := make([]byte, 4)
-	native.PutUint32(txqLen, 0)
+	native.PutUint32(txqLen, uint32(txQueueLen))
 	txqData := newRtAttr(syscall.IFLA_TXQLEN, txqLen)
 	wb.AddData(txqData)
 
@@ -710,7 +710,7 @@ func NetworkCreateVethPair(name1, name2 string) error {
 	newRtAttrChild(nest3, syscall.IFLA_IFNAME, zeroTerminated(name2))
 
 	txqLen2 := make([]byte, 4)
-	native.PutUint32(txqLen2, 0)
+	native.PutUint32(txqLen2, uint32(txQueueLen))
 	newRtAttrChild(nest3, syscall.IFLA_TXQLEN, txqLen2)
 
 	wb.AddData(nest1)
