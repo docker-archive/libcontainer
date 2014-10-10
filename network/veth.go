@@ -19,8 +19,8 @@ const defaultDevice = "eth0"
 
 func (v *Veth) Create(n *Network, nspid int, networkState *NetworkState) error {
 	var (
-		bridge = n.Bridge
-		prefix = n.VethPrefix
+		bridge     = n.Bridge
+		prefix     = n.VethPrefix
 		txQueueLen = n.TxQueueLen
 	)
 	if bridge == "" {
