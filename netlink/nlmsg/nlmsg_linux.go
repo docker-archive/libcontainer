@@ -193,7 +193,7 @@ func NewRtAttrChild(parent *RtAttr, attrType int, data []byte) *RtAttr {
 // Len returns the length in bytes of a RtAttr.
 func (a *RtAttr) Len() int {
 	if len(a.children) == 0 {
-		return (syscall.SizeofRtAttr + len(a.Data))
+		return (syscall.SizeofRtAttr + RtaAlignOf(len(a.Data)))
 	}
 
 	l := 0
