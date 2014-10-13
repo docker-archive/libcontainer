@@ -63,7 +63,7 @@ func UseSystemd() bool {
 		hasStartTransientUnit = true
 
 		// But if we get UnknownMethod error we don't
-		if _, err := theConn.StartTransientUnit("test.scope", "invalid"); err != nil {
+		if _, err := theConn.StartTransientUnit("test.scope", "invalid", []systemd.Property{}, make(chan string)); err != nil {
 			if dbusError, ok := err.(dbus.Error); ok {
 				if dbusError.Name == "org.freedesktop.DBus.Error.UnknownMethod" {
 					hasStartTransientUnit = false
@@ -122,7 +122,7 @@ func Apply(c *cgroups.Cgroup, pid int) (cgroups.ActiveCgroup, error) {
 			systemd.Property{"CPUShares", dbus.MakeVariant(uint64(c.CpuShares))})
 	}
 
-	if _, err := theConn.StartTransientUnit(unitName, "replace", properties...); err != nil {
+	if _, err := theConn.StartTransientUnit(unitName, "replace", properties, make(chan string)); err != nil {
 		return nil, err
 	}
 
