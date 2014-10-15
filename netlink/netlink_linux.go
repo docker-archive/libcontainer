@@ -1,15 +1,15 @@
 package netlink
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"math/rand"
 	"net"
 	"os"
-	"sync/atomic"
 	"syscall"
 	"unsafe"
+
+	"github.com/docker/libcontainer/netlink/nlmsg"
 )
 
 const (
@@ -34,8 +34,6 @@ const (
 	MACVLAN_MODE_PASSTHRU
 )
 
-var nextSeqNr uint32
-
 type ifreqHwaddr struct {
 	IfrnName   [IFNAMSIZ]byte
 	IfruHwaddr syscall.RawSockaddr
@@ -51,349 +49,6 @@ type ifreqFlags struct {
 	Ifruflags uint16
 }
 
-var native binary.ByteOrder
-
-func init() {
-	var x uint32 = 0x01020304
-	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
-		native = binary.BigEndian
-	} else {
-		native = binary.LittleEndian
-	}
-}
-
-func getIpFamily(ip net.IP) int {
-	if len(ip) <= net.IPv4len {
-		return syscall.AF_INET
-	}
-	if ip.To4() != nil {
-		return syscall.AF_INET
-	}
-	return syscall.AF_INET6
-}
-
-type NetlinkRequestData interface {
-	Len() int
-	ToWireFormat() []byte
-}
-
-type IfInfomsg struct {
-	syscall.IfInfomsg
-}
-
-func newIfInfomsg(family int) *IfInfomsg {
-	return &IfInfomsg{
-		IfInfomsg: syscall.IfInfomsg{
-			Family: uint8(family),
-		},
-	}
-}
-
-func newIfInfomsgChild(parent *RtAttr, family int) *IfInfomsg {
-	msg := newIfInfomsg(family)
-	parent.children = append(parent.children, msg)
-	return msg
-}
-
-func (msg *IfInfomsg) ToWireFormat() []byte {
-	length := syscall.SizeofIfInfomsg
-	b := make([]byte, length)
-	b[0] = msg.Family
-	b[1] = 0
-	native.PutUint16(b[2:4], msg.Type)
-	native.PutUint32(b[4:8], uint32(msg.Index))
-	native.PutUint32(b[8:12], msg.Flags)
-	native.PutUint32(b[12:16], msg.Change)
-	return b
-}
-
-func (msg *IfInfomsg) Len() int {
-	return syscall.SizeofIfInfomsg
-}
-
-type IfAddrmsg struct {
-	syscall.IfAddrmsg
-}
-
-func newIfAddrmsg(family int) *IfAddrmsg {
-	return &IfAddrmsg{
-		IfAddrmsg: syscall.IfAddrmsg{
-			Family: uint8(family),
-		},
-	}
-}
-
-func (msg *IfAddrmsg) ToWireFormat() []byte {
-	length := syscall.SizeofIfAddrmsg
-	b := make([]byte, length)
-	b[0] = msg.Family
-	b[1] = msg.Prefixlen
-	b[2] = msg.Flags
-	b[3] = msg.Scope
-	native.PutUint32(b[4:8], msg.Index)
-	return b
-}
-
-func (msg *IfAddrmsg) Len() int {
-	return syscall.SizeofIfAddrmsg
-}
-
-type RtMsg struct {
-	syscall.RtMsg
-}
-
-func newRtMsg() *RtMsg {
-	return &RtMsg{
-		RtMsg: syscall.RtMsg{
-			Table:    syscall.RT_TABLE_MAIN,
-			Scope:    syscall.RT_SCOPE_UNIVERSE,
-			Protocol: syscall.RTPROT_BOOT,
-			Type:     syscall.RTN_UNICAST,
-		},
-	}
-}
-
-func (msg *RtMsg) ToWireFormat() []byte {
-	length := syscall.SizeofRtMsg
-	b := make([]byte, length)
-	b[0] = msg.Family
-	b[1] = msg.Dst_len
-	b[2] = msg.Src_len
-	b[3] = msg.Tos
-	b[4] = msg.Table
-	b[5] = msg.Protocol
-	b[6] = msg.Scope
-	b[7] = msg.Type
-	native.PutUint32(b[8:12], msg.Flags)
-	return b
-}
-
-func (msg *RtMsg) Len() int {
-	return syscall.SizeofRtMsg
-}
-
-func rtaAlignOf(attrlen int) int {
-	return (attrlen + syscall.RTA_ALIGNTO - 1) & ^(syscall.RTA_ALIGNTO - 1)
-}
-
-type RtAttr struct {
-	syscall.RtAttr
-	Data     []byte
-	children []NetlinkRequestData
-}
-
-func newRtAttr(attrType int, data []byte) *RtAttr {
-	return &RtAttr{
-		RtAttr: syscall.RtAttr{
-			Type: uint16(attrType),
-		},
-		children: []NetlinkRequestData{},
-		Data:     data,
-	}
-}
-
-func newRtAttrChild(parent *RtAttr, attrType int, data []byte) *RtAttr {
-	attr := newRtAttr(attrType, data)
-	parent.children = append(parent.children, attr)
-	return attr
-}
-
-func (a *RtAttr) Len() int {
-	if len(a.children) == 0 {
-		return (syscall.SizeofRtAttr + len(a.Data))
-	}
-
-	l := 0
-	for _, child := range a.children {
-		l += child.Len()
-	}
-	l += syscall.SizeofRtAttr
-	return rtaAlignOf(l + len(a.Data))
-}
-
-func (a *RtAttr) ToWireFormat() []byte {
-	length := a.Len()
-	buf := make([]byte, rtaAlignOf(length))
-
-	if a.Data != nil {
-		copy(buf[4:], a.Data)
-	} else {
-		next := 4
-		for _, child := range a.children {
-			childBuf := child.ToWireFormat()
-			copy(buf[next:], childBuf)
-			next += rtaAlignOf(len(childBuf))
-		}
-	}
-
-	if l := uint16(length); l != 0 {
-		native.PutUint16(buf[0:2], l)
-	}
-	native.PutUint16(buf[2:4], a.Type)
-	return buf
-}
-
-func uint32Attr(t int, n uint32) *RtAttr {
-	buf := make([]byte, 4)
-	native.PutUint32(buf, n)
-	return newRtAttr(t, buf)
-}
-
-type NetlinkRequest struct {
-	syscall.NlMsghdr
-	Data []NetlinkRequestData
-}
-
-func (rr *NetlinkRequest) ToWireFormat() []byte {
-	length := rr.Len
-	dataBytes := make([][]byte, len(rr.Data))
-	for i, data := range rr.Data {
-		dataBytes[i] = data.ToWireFormat()
-		length += uint32(len(dataBytes[i]))
-	}
-	b := make([]byte, length)
-	native.PutUint32(b[0:4], length)
-	native.PutUint16(b[4:6], rr.Type)
-	native.PutUint16(b[6:8], rr.Flags)
-	native.PutUint32(b[8:12], rr.Seq)
-	native.PutUint32(b[12:16], rr.Pid)
-
-	next := 16
-	for _, data := range dataBytes {
-		copy(b[next:], data)
-		next += len(data)
-	}
-	return b
-}
-
-func (rr *NetlinkRequest) AddData(data NetlinkRequestData) {
-	if data != nil {
-		rr.Data = append(rr.Data, data)
-	}
-}
-
-func newNetlinkRequest(proto, flags int) *NetlinkRequest {
-	return &NetlinkRequest{
-		NlMsghdr: syscall.NlMsghdr{
-			Len:   uint32(syscall.NLMSG_HDRLEN),
-			Type:  uint16(proto),
-			Flags: syscall.NLM_F_REQUEST | uint16(flags),
-			Seq:   atomic.AddUint32(&nextSeqNr, 1),
-		},
-	}
-}
-
-type NetlinkSocket struct {
-	fd  int
-	lsa syscall.SockaddrNetlink
-}
-
-func getNetlinkSocket() (*NetlinkSocket, error) {
-	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_ROUTE)
-	if err != nil {
-		return nil, err
-	}
-	s := &NetlinkSocket{
-		fd: fd,
-	}
-	s.lsa.Family = syscall.AF_NETLINK
-	if err := syscall.Bind(fd, &s.lsa); err != nil {
-		syscall.Close(fd)
-		return nil, err
-	}
-
-	return s, nil
-}
-
-func (s *NetlinkSocket) Close() {
-	syscall.Close(s.fd)
-}
-
-func (s *NetlinkSocket) Send(request *NetlinkRequest) error {
-	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.lsa); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
-	rb := make([]byte, syscall.Getpagesize())
-	nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
-	if err != nil {
-		return nil, err
-	}
-	if nr < syscall.NLMSG_HDRLEN {
-		return nil, ErrShortResponse
-	}
-	rb = rb[:nr]
-	return syscall.ParseNetlinkMessage(rb)
-}
-
-func (s *NetlinkSocket) GetPid() (uint32, error) {
-	lsa, err := syscall.Getsockname(s.fd)
-	if err != nil {
-		return 0, err
-	}
-	switch v := lsa.(type) {
-	case *syscall.SockaddrNetlink:
-		return v.Pid, nil
-	}
-	return 0, ErrWrongSockType
-}
-
-func (s *NetlinkSocket) CheckMessage(m syscall.NetlinkMessage, seq, pid uint32) error {
-	if m.Header.Seq != seq {
-		return fmt.Errorf("netlink: invalid seq %d, expected %d", m.Header.Seq, seq)
-	}
-	if m.Header.Pid != pid {
-		return fmt.Errorf("netlink: wrong pid %d, expected %d", m.Header.Pid, pid)
-	}
-	if m.Header.Type == syscall.NLMSG_DONE {
-		return io.EOF
-	}
-	if m.Header.Type == syscall.NLMSG_ERROR {
-		e := int32(native.Uint32(m.Data[0:4]))
-		if e == 0 {
-			return io.EOF
-		}
-		return syscall.Errno(-e)
-	}
-	return nil
-}
-
-func (s *NetlinkSocket) HandleAck(seq uint32) error {
-	pid, err := s.GetPid()
-	if err != nil {
-		return err
-	}
-
-outer:
-	for {
-		msgs, err := s.Receive()
-		if err != nil {
-			return err
-		}
-		for _, m := range msgs {
-			if err := s.CheckMessage(m, seq, pid); err != nil {
-				if err == io.EOF {
-					break outer
-				}
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func zeroTerminated(s string) []byte {
-	return []byte(s + "\000")
-}
-
-func nonZeroTerminated(s string) []byte {
-	return []byte(s)
-}
-
 // Add a new network link of a specified type.
 // This is identical to running: ip link add $name type $linkType
 func NetworkLinkAdd(name string, linkType string) error {
@@ -401,22 +56,22 @@ func NetworkLinkAdd(name string, linkType string) error {
 		return fmt.Errorf("Neither link name nor link type can be empty!")
 	}
 
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	wb.AddData(msg)
 
-	linkInfo := newRtAttr(syscall.IFLA_LINKINFO, nil)
-	newRtAttrChild(linkInfo, IFLA_INFO_KIND, nonZeroTerminated(linkType))
+	linkInfo := nlmsg.NewRtAttr(syscall.IFLA_LINKINFO, nil)
+	nlmsg.NewRtAttrChild(linkInfo, IFLA_INFO_KIND, nlmsg.NonZeroTerminated(linkType))
 	wb.AddData(linkInfo)
 
-	nameData := newRtAttr(syscall.IFLA_IFNAME, zeroTerminated(name))
+	nameData := nlmsg.NewRtAttr(syscall.IFLA_IFNAME, nlmsg.ZeroTerminated(name))
 	wb.AddData(nameData)
 
 	if err := s.Send(wb); err != nil {
@@ -433,7 +88,7 @@ func NetworkLinkDel(name string) error {
 		return fmt.Errorf("Network link name can not be empty!")
 	}
 
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
@@ -444,9 +99,9 @@ func NetworkLinkDel(name string) error {
 		return err
 	}
 
-	wb := newNetlinkRequest(syscall.RTM_DELLINK, syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_DELLINK, syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	msg.Index = int32(iface.Index)
 	wb.AddData(msg)
 
@@ -460,15 +115,15 @@ func NetworkLinkDel(name string) error {
 // Bring up a particular network interface.
 // This is identical to running: ip link set dev $name up
 func NetworkLinkUp(iface *net.Interface) error {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	msg.Index = int32(iface.Index)
 	msg.Flags = syscall.IFF_UP
 	msg.Change = syscall.IFF_UP
@@ -484,15 +139,15 @@ func NetworkLinkUp(iface *net.Interface) error {
 // Bring down a particular network interface.
 // This is identical to running: ip link set $name down
 func NetworkLinkDown(iface *net.Interface) error {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	msg.Index = int32(iface.Index)
 	msg.Flags = 0 & ^syscall.IFF_UP
 	msg.Change = DEFAULT_CHANGE
@@ -508,7 +163,7 @@ func NetworkLinkDown(iface *net.Interface) error {
 // Set link layer address ie. MAC Address.
 // This is identical to running: ip link set dev $name address $macaddress
 func NetworkSetMacAddress(iface *net.Interface, macaddr string) error {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
@@ -528,16 +183,16 @@ func NetworkSetMacAddress(iface *net.Interface, macaddr string) error {
 		return fmt.Errorf("Incorrect Local MAC Address specified: %s", macaddr)
 	}
 
-	wb := newNetlinkRequest(syscall.RTM_SETLINK, syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_SETLINK, syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	msg.Index = int32(iface.Index)
 	msg.Change = DEFAULT_CHANGE
 	wb.AddData(msg)
 
 	macdata := make([]byte, 6)
 	copy(macdata, hwaddr)
-	data := newRtAttr(IFLA_ADDRESS, macdata)
+	data := nlmsg.NewRtAttr(IFLA_ADDRESS, macdata)
 	wb.AddData(data)
 
 	if err := s.Send(wb); err != nil {
@@ -553,21 +208,21 @@ func NetworkSetMacAddress(iface *net.Interface, macaddr string) error {
 // There is a discussion about how to deal with ifcs joining bridge with MTU > 1500
 // Regular network nterfaces do seem to work though!
 func NetworkSetMTU(iface *net.Interface, mtu int) error {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_SETLINK, syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_SETLINK, syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	msg.Type = syscall.RTM_SETLINK
 	msg.Flags = syscall.NLM_F_REQUEST
 	msg.Index = int32(iface.Index)
 	msg.Change = DEFAULT_CHANGE
 	wb.AddData(msg)
-	wb.AddData(uint32Attr(syscall.IFLA_MTU, uint32(mtu)))
+	wb.AddData(nlmsg.Uint32Attr(syscall.IFLA_MTU, uint32(mtu)))
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -575,16 +230,16 @@ func NetworkSetMTU(iface *net.Interface, mtu int) error {
 	return s.HandleAck(wb.Seq)
 }
 
-func networkMasterAction(iface *net.Interface, rtattr *RtAttr) error {
-	s, err := getNetlinkSocket()
+func networkMasterAction(iface *net.Interface, rtattr *nlmsg.RtAttr) error {
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_SETLINK, syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_SETLINK, syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	msg.Type = syscall.RTM_SETLINK
 	msg.Flags = syscall.NLM_F_REQUEST
 	msg.Index = int32(iface.Index)
@@ -602,26 +257,26 @@ func networkMasterAction(iface *net.Interface, rtattr *RtAttr) error {
 // Add an interface to bridge.
 // This is identical to running: ip link set $name master $master
 func NetworkSetMaster(iface, master *net.Interface) error {
-	data := uint32Attr(syscall.IFLA_MASTER, uint32(master.Index))
+	data := nlmsg.Uint32Attr(syscall.IFLA_MASTER, uint32(master.Index))
 	return networkMasterAction(iface, data)
 }
 
 // Remove an interface from the bridge
 // This is is identical to to running: ip link $name set nomaster
 func NetworkSetNoMaster(iface *net.Interface) error {
-	data := uint32Attr(syscall.IFLA_MASTER, 0)
+	data := nlmsg.Uint32Attr(syscall.IFLA_MASTER, 0)
 	return networkMasterAction(iface, data)
 }
 
-func networkSetNsAction(iface *net.Interface, rtattr *RtAttr) error {
-	s, err := getNetlinkSocket()
+func networkSetNsAction(iface *net.Interface, rtattr *nlmsg.RtAttr) error {
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_ACK)
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_ACK)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	msg.Index = int32(iface.Index)
 	wb.AddData(msg)
 	wb.AddData(rtattr)
@@ -636,7 +291,7 @@ func networkSetNsAction(iface *net.Interface, rtattr *RtAttr) error {
 // Move a particular network interface to a particular network namespace
 // specified by PID. This is idential to running: ip link set dev $name netns $pid
 func NetworkSetNsPid(iface *net.Interface, nspid int) error {
-	data := uint32Attr(syscall.IFLA_NET_NS_PID, uint32(nspid))
+	data := nlmsg.Uint32Attr(syscall.IFLA_NET_NS_PID, uint32(nspid))
 	return networkSetNsAction(iface, data)
 }
 
@@ -644,7 +299,7 @@ func NetworkSetNsPid(iface *net.Interface, nspid int) error {
 // network namespace specified by file descriptor.
 // This is idential to running: ip link set dev $name netns $fd
 func NetworkSetNsFd(iface *net.Interface, fd int) error {
-	data := uint32Attr(IFLA_NET_NS_FD, uint32(fd))
+	data := nlmsg.Uint32Attr(IFLA_NET_NS_FD, uint32(fd))
 	return networkSetNsAction(iface, data)
 }
 
@@ -656,20 +311,20 @@ func NetworkChangeName(iface *net.Interface, newName string) error {
 		return fmt.Errorf("Interface name %s too long", newName)
 	}
 
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_SETLINK, syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_SETLINK, syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	msg.Index = int32(iface.Index)
 	msg.Change = DEFAULT_CHANGE
 	wb.AddData(msg)
 
-	nameData := newRtAttr(syscall.IFLA_IFNAME, zeroTerminated(newName))
+	nameData := nlmsg.NewRtAttr(syscall.IFLA_IFNAME, nlmsg.ZeroTerminated(newName))
 	wb.AddData(nameData)
 
 	if err := s.Send(wb); err != nil {
@@ -682,27 +337,27 @@ func NetworkChangeName(iface *net.Interface, newName string) error {
 // Add a new VETH pair link on the host
 // This is identical to running: ip link add name $name type veth peer name $peername
 func NetworkCreateVethPair(name1, name2 string) error {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	wb.AddData(msg)
 
-	nameData := newRtAttr(syscall.IFLA_IFNAME, zeroTerminated(name1))
+	nameData := nlmsg.NewRtAttr(syscall.IFLA_IFNAME, nlmsg.ZeroTerminated(name1))
 	wb.AddData(nameData)
 
-	nest1 := newRtAttr(syscall.IFLA_LINKINFO, nil)
-	newRtAttrChild(nest1, IFLA_INFO_KIND, zeroTerminated("veth"))
-	nest2 := newRtAttrChild(nest1, IFLA_INFO_DATA, nil)
-	nest3 := newRtAttrChild(nest2, VETH_INFO_PEER, nil)
+	nest1 := nlmsg.NewRtAttr(syscall.IFLA_LINKINFO, nil)
+	nlmsg.NewRtAttrChild(nest1, IFLA_INFO_KIND, nlmsg.ZeroTerminated("veth"))
+	nest2 := nlmsg.NewRtAttrChild(nest1, IFLA_INFO_DATA, nil)
+	nest3 := nlmsg.NewRtAttrChild(nest2, VETH_INFO_PEER, nil)
 
-	newIfInfomsgChild(nest3, syscall.AF_UNSPEC)
-	newRtAttrChild(nest3, syscall.IFLA_IFNAME, zeroTerminated(name2))
+	nlmsg.NewIfInfomsgChild(nest3, syscall.AF_UNSPEC)
+	nlmsg.NewRtAttrChild(nest3, syscall.IFLA_IFNAME, nlmsg.ZeroTerminated(name2))
 
 	wb.AddData(nest1)
 
@@ -725,33 +380,33 @@ func NetworkCreateVethPair(name1, name2 string) error {
 // This is identical to running:
 // ip link add name $name link $masterdev type vlan id $id
 func NetworkLinkAddVlan(masterDev, vlanDev string, vlanId uint16) error {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
 
 	masterDevIfc, err := net.InterfaceByName(masterDev)
 	if err != nil {
 		return err
 	}
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	wb.AddData(msg)
 
-	nest1 := newRtAttr(syscall.IFLA_LINKINFO, nil)
-	newRtAttrChild(nest1, IFLA_INFO_KIND, nonZeroTerminated("vlan"))
+	nest1 := nlmsg.NewRtAttr(syscall.IFLA_LINKINFO, nil)
+	nlmsg.NewRtAttrChild(nest1, IFLA_INFO_KIND, nlmsg.NonZeroTerminated("vlan"))
 
-	nest2 := newRtAttrChild(nest1, IFLA_INFO_DATA, nil)
+	nest2 := nlmsg.NewRtAttrChild(nest1, IFLA_INFO_DATA, nil)
 	vlanData := make([]byte, 2)
-	native.PutUint16(vlanData, vlanId)
-	newRtAttrChild(nest2, IFLA_VLAN_ID, vlanData)
+	nlmsg.Native.PutUint16(vlanData, vlanId)
+	nlmsg.NewRtAttrChild(nest2, IFLA_VLAN_ID, vlanData)
 	wb.AddData(nest1)
 
-	wb.AddData(uint32Attr(syscall.IFLA_LINK, uint32(masterDevIfc.Index)))
-	wb.AddData(newRtAttr(syscall.IFLA_IFNAME, zeroTerminated(vlanDev)))
+	wb.AddData(nlmsg.Uint32Attr(syscall.IFLA_LINK, uint32(masterDevIfc.Index)))
+	wb.AddData(nlmsg.NewRtAttr(syscall.IFLA_IFNAME, nlmsg.ZeroTerminated(vlanDev)))
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -763,7 +418,7 @@ func NetworkLinkAddVlan(masterDev, vlanDev string, vlanId uint16) error {
 // This is identical to running:
 // ip link add name $name link $masterdev type macvlan mode $mode
 func NetworkLinkAddMacVlan(masterDev, macVlanDev string, mode string) error {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
@@ -776,27 +431,27 @@ func NetworkLinkAddMacVlan(masterDev, macVlanDev string, mode string) error {
 		"passthru": MACVLAN_MODE_PASSTHRU,
 	}
 
-	wb := newNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_NEWLINK, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
 
 	masterDevIfc, err := net.InterfaceByName(masterDev)
 	if err != nil {
 		return err
 	}
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	wb.AddData(msg)
 
-	nest1 := newRtAttr(syscall.IFLA_LINKINFO, nil)
-	newRtAttrChild(nest1, IFLA_INFO_KIND, nonZeroTerminated("macvlan"))
+	nest1 := nlmsg.NewRtAttr(syscall.IFLA_LINKINFO, nil)
+	nlmsg.NewRtAttrChild(nest1, IFLA_INFO_KIND, nlmsg.NonZeroTerminated("macvlan"))
 
-	nest2 := newRtAttrChild(nest1, IFLA_INFO_DATA, nil)
+	nest2 := nlmsg.NewRtAttrChild(nest1, IFLA_INFO_DATA, nil)
 	macVlanData := make([]byte, 4)
-	native.PutUint32(macVlanData, macVlan[mode])
-	newRtAttrChild(nest2, IFLA_MACVLAN_MODE, macVlanData)
+	nlmsg.Native.PutUint32(macVlanData, macVlan[mode])
+	nlmsg.NewRtAttrChild(nest2, IFLA_MACVLAN_MODE, macVlanData)
 	wb.AddData(nest1)
 
-	wb.AddData(uint32Attr(syscall.IFLA_LINK, uint32(masterDevIfc.Index)))
-	wb.AddData(newRtAttr(syscall.IFLA_IFNAME, zeroTerminated(macVlanDev)))
+	wb.AddData(nlmsg.Uint32Attr(syscall.IFLA_LINK, uint32(masterDevIfc.Index)))
+	wb.AddData(nlmsg.NewRtAttr(syscall.IFLA_IFNAME, nlmsg.ZeroTerminated(macVlanDev)))
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -805,17 +460,17 @@ func NetworkLinkAddMacVlan(masterDev, macVlanDev string, mode string) error {
 }
 
 func networkLinkIpAction(action, flags int, ifa IfAddr) error {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	family := getIpFamily(ifa.IP)
+	family := nlmsg.GetIpFamily(ifa.IP)
 
-	wb := newNetlinkRequest(action, flags)
+	wb := nlmsg.NewNetlinkRequest(action, flags)
 
-	msg := newIfAddrmsg(family)
+	msg := nlmsg.NewIfAddrmsg(family)
 	msg.Index = uint32(ifa.Iface.Index)
 	prefixLen, _ := ifa.IPNet.Mask.Size()
 	msg.Prefixlen = uint8(prefixLen)
@@ -828,10 +483,10 @@ func networkLinkIpAction(action, flags int, ifa IfAddr) error {
 		ipData = ifa.IP.To16()
 	}
 
-	localData := newRtAttr(syscall.IFA_LOCAL, ipData)
+	localData := nlmsg.NewRtAttr(syscall.IFA_LOCAL, ipData)
 	wb.AddData(localData)
 
-	addrData := newRtAttr(syscall.IFA_ADDRESS, ipData)
+	addrData := nlmsg.NewRtAttr(syscall.IFA_ADDRESS, ipData)
 	wb.AddData(addrData)
 
 	if err := s.Send(wb); err != nil {
@@ -864,15 +519,15 @@ func NetworkLinkAddIp(iface *net.Interface, ip net.IP, ipNet *net.IPNet) error {
 // Returns an array of IPNet for all the currently routed subnets on ipv4
 // This is similar to the first column of "ip route" output
 func NetworkGetRoutes() ([]Route, error) {
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return nil, err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_GETROUTE, syscall.NLM_F_DUMP)
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_GETROUTE, syscall.NLM_F_DUMP)
 
-	msg := newIfInfomsg(syscall.AF_UNSPEC)
+	msg := nlmsg.NewIfInfomsg(syscall.AF_UNSPEC)
 	wb.AddData(msg)
 
 	if err := s.Send(wb); err != nil {
@@ -905,7 +560,7 @@ outer:
 
 			var r Route
 
-			msg := (*RtMsg)(unsafe.Pointer(&m.Data[0:syscall.SizeofRtMsg][0]))
+			msg := (*nlmsg.RtMsg)(unsafe.Pointer(&m.Data[0:syscall.SizeofRtMsg][0]))
 
 			if msg.Flags&syscall.RTM_F_CLONED != 0 {
 				// Ignore cloned routes
@@ -940,7 +595,7 @@ outer:
 						Mask: net.CIDRMask(int(msg.Dst_len), 8*len(ip)),
 					}
 				case syscall.RTA_OIF:
-					index := int(native.Uint32(attr.Value[0:4]))
+					index := int(nlmsg.Native.Uint32(attr.Value[0:4]))
 					r.Iface, _ = net.InterfaceByIndex(index)
 				}
 			}
@@ -959,23 +614,23 @@ func AddRoute(destination, source, gateway, device string) error {
 		return fmt.Errorf("one of destination, source or gateway must not be blank")
 	}
 
-	s, err := getNetlinkSocket()
+	s, err := nlmsg.NewNetlinkSocket()
 	if err != nil {
 		return err
 	}
 	defer s.Close()
 
-	wb := newNetlinkRequest(syscall.RTM_NEWROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
-	msg := newRtMsg()
+	wb := nlmsg.NewNetlinkRequest(syscall.RTM_NEWROUTE, syscall.NLM_F_CREATE|syscall.NLM_F_EXCL|syscall.NLM_F_ACK)
+	msg := nlmsg.NewRtMsg()
 	currentFamily := -1
-	var rtAttrs []*RtAttr
+	var rtAttrs []*nlmsg.RtAttr
 
 	if destination != "" {
 		destIP, destNet, err := net.ParseCIDR(destination)
 		if err != nil {
 			return fmt.Errorf("destination CIDR %s couldn't be parsed", destination)
 		}
-		destFamily := getIpFamily(destIP)
+		destFamily := nlmsg.GetIpFamily(destIP)
 		currentFamily = destFamily
 		destLen, bits := destNet.Mask.Size()
 		if destLen == 0 && bits == 0 {
@@ -989,7 +644,7 @@ func AddRoute(destination, source, gateway, device string) error {
 		} else {
 			destData = destIP.To16()
 		}
-		rtAttrs = append(rtAttrs, newRtAttr(syscall.RTA_DST, destData))
+		rtAttrs = append(rtAttrs, nlmsg.NewRtAttr(syscall.RTA_DST, destData))
 	}
 
 	if source != "" {
@@ -997,7 +652,7 @@ func AddRoute(destination, source, gateway, device string) error {
 		if err != nil {
 			return fmt.Errorf("source CIDR %s couldn't be parsed", source)
 		}
-		srcFamily := getIpFamily(srcIP)
+		srcFamily := nlmsg.GetIpFamily(srcIP)
 		if currentFamily != -1 && currentFamily != srcFamily {
 			return fmt.Errorf("source and destination ip were not the same IP family")
 		}
@@ -1014,7 +669,7 @@ func AddRoute(destination, source, gateway, device string) error {
 		} else {
 			srcData = srcIP.To16()
 		}
-		rtAttrs = append(rtAttrs, newRtAttr(syscall.RTA_SRC, srcData))
+		rtAttrs = append(rtAttrs, nlmsg.NewRtAttr(syscall.RTA_SRC, srcData))
 	}
 
 	if gateway != "" {
@@ -1022,7 +677,7 @@ func AddRoute(destination, source, gateway, device string) error {
 		if gwIP == nil {
 			return fmt.Errorf("gateway IP %s couldn't be parsed", gateway)
 		}
-		gwFamily := getIpFamily(gwIP)
+		gwFamily := nlmsg.GetIpFamily(gwIP)
 		if currentFamily != -1 && currentFamily != gwFamily {
 			return fmt.Errorf("gateway, source, and destination ip were not the same IP family")
 		}
@@ -1033,7 +688,7 @@ func AddRoute(destination, source, gateway, device string) error {
 		} else {
 			gwData = gwIP.To16()
 		}
-		rtAttrs = append(rtAttrs, newRtAttr(syscall.RTA_GATEWAY, gwData))
+		rtAttrs = append(rtAttrs, nlmsg.NewRtAttr(syscall.RTA_GATEWAY, gwData))
 	}
 
 	wb.AddData(msg)
@@ -1045,7 +700,7 @@ func AddRoute(destination, source, gateway, device string) error {
 	if err != nil {
 		return err
 	}
-	wb.AddData(uint32Attr(syscall.RTA_OIF, uint32(iface.Index)))
+	wb.AddData(nlmsg.Uint32Attr(syscall.RTA_OIF, uint32(iface.Index)))
 
 	if err := s.Send(wb); err != nil {
 		return err
