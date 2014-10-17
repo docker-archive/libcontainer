@@ -205,7 +205,7 @@ func (a *RtAttr) Len() int {
 
 	l := 0
 	for _, child := range a.children {
-		l += child.Len()
+		l += rtaAlignOf(child.Len())
 	}
 	l += syscall.SizeofRtAttr
 	return rtaAlignOf(l + len(a.Data))
