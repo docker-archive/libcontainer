@@ -48,9 +48,9 @@ func GetIpFamily(ip net.IP) int {
 	return syscall.AF_INET6
 }
 
-// NetlinkRequestData is a type wrapper for system specified struts.
+// NetlinkRequestData is a type wrapper for system specified structs.
 // Use this to provide an alternative representation of a struct that is more
-// amenable to manipluation by the user of this package.
+// amenable to manipulation by the user of this package.
 type NetlinkRequestData interface {
 	Len() int
 	ToWireFormat() []byte
