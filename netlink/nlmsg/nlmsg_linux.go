@@ -369,7 +369,7 @@ func (s *NetlinkSocket) CheckMessage(m syscall.NetlinkMessage, seq, pid uint32) 
 }
 
 // HandleAck reads a message acknowledgement from the netlink socket.
-// Returns an error if the message failes to match the specified
+// Returns an error if the message fails to match the specified
 // sequence.  The message is discarded.
 func (s *NetlinkSocket) HandleAck(seq uint32) error {
 	pid, err := s.GetPid()
