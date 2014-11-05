@@ -30,7 +30,7 @@ import (
 // and other options required for the new container.
 // The caller of Init function has to ensure that the go runtime is locked to an OS thread
 // (using runtime.LockOSThread) else system calls like setns called within Init may not work as intended.
-func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, syncPipe *syncpipe.SyncPipe, args []string) (err error) {
+func Init(container *libcontainer.Config, uncleanRootfs string, c console.Console, syncPipe *syncpipe.SyncPipe, args []string) (err error) {
 	defer func() {
 		if err != nil {
 			syncPipe.ReportChildError(err)
@@ -53,19 +53,14 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, syn
 	if err := syncPipe.ReadFromParent(&networkState); err != nil {
 		return err
 	}
-
-	if consolePath != "" {
-		if err := console.OpenAndDup(consolePath); err != nil {
-			return err
-		}
+	if err := c.Dup(); err != nil {
+		return err
 	}
 	if _, err := syscall.Setsid(); err != nil {
 		return fmt.Errorf("setsid %s", err)
 	}
-	if consolePath != "" {
-		if err := system.Setctty(); err != nil {
-			return fmt.Errorf("setctty %s", err)
-		}
+	if err := c.Setctty(); err != nil {
+		return fmt.Errorf("setctty %s", err)
 	}
 	if err := ipc.Initialize(container.IpcNsPath); err != nil {
 		return fmt.Errorf("setup IPC %s", err)
@@ -76,11 +71,10 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, syn
 	if err := setupRoute(container); err != nil {
 		return fmt.Errorf("setup route %s", err)
 	}
-
 	label.Init()
 
 	if err := mount.InitializeMountNamespace(rootfs,
-		consolePath,
+		c,
 		container.RestrictSys,
 		(*mount.MountConfig)(container.MountConfig)); err != nil {
 		return fmt.Errorf("setup mount namespace %s", err)

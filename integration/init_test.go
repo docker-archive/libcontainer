@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/docker/libcontainer/console"
 	"github.com/docker/libcontainer/namespaces"
 	"github.com/docker/libcontainer/syncpipe"
 )
@@ -32,7 +33,7 @@ func init() {
 		log.Fatalf("unable to create sync pipe: %s", err)
 	}
 
-	if err := namespaces.Init(container, rootfs, "", syncPipe, os.Args[3:]); err != nil {
+	if err := namespaces.Init(container, rootfs, console.FromPath(""), syncPipe, os.Args[3:]); err != nil {
 		log.Fatalf("unable to initialize for container: %s", err)
 	}
 	os.Exit(1)

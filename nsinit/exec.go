@@ -72,11 +72,10 @@ func execAction(context *cli.Context) {
 // application.
 func startInExistingContainer(config *libcontainer.Config, state *libcontainer.State, action string, context *cli.Context) (int, error) {
 	var (
-		master  *os.File
-		console string
-		err     error
+		err error
 
-		sigc = make(chan os.Signal, 10)
+		console = consolepkg.Null()
+		sigc    = make(chan os.Signal, 10)
 
 		stdin  = os.Stdin
 		stdout = os.Stdout
@@ -89,37 +88,34 @@ func startInExistingContainer(config *libcontainer.Config, state *libcontainer.S
 		stdout = nil
 		stderr = nil
 
-		master, console, err = consolepkg.CreateMasterAndConsole()
-		if err != nil {
+		if console, err = consolepkg.New(); err != nil {
 			return -1, err
 		}
 
-		go io.Copy(master, os.Stdin)
-		go io.Copy(os.Stdout, master)
+		go io.Copy(console.Master(), os.Stdin)
+		go io.Copy(os.Stdout, console.Master())
 
 		state, err := term.SetRawTerminal(os.Stdin.Fd())
 		if err != nil {
 			return -1, err
 		}
-
 		defer term.RestoreTerminal(os.Stdin.Fd(), state)
 	}
 
 	startCallback := func(cmd *exec.Cmd) {
 		go func() {
-			resizeTty(master)
+			resizeConsole(console)
 
 			for sig := range sigc {
 				switch sig {
 				case syscall.SIGWINCH:
-					resizeTty(master)
+					resizeConsole(console)
 				default:
 					cmd.Process.Signal(sig)
 				}
 			}
 		}()
 	}
-
 	return namespaces.ExecIn(config, state, context.Args(), os.Args[0], action, stdin, stdout, stderr, console, startCallback)
 }
 
@@ -144,13 +140,12 @@ func startContainer(container *libcontainer.Config, dataPath string, args []stri
 	}
 
 	var (
-		master  *os.File
-		console string
-		err     error
+		err error
 
-		stdin  = os.Stdin
-		stdout = os.Stdout
-		stderr = os.Stderr
+		console = consolepkg.Null()
+		stdin   = os.Stdin
+		stdout  = os.Stdout
+		stderr  = os.Stderr
 	)
 
 	if container.Tty {
@@ -158,51 +153,44 @@ func startContainer(container *libcontainer.Config, dataPath string, args []stri
 		stdout = nil
 		stderr = nil
 
-		master, console, err = consolepkg.CreateMasterAndConsole()
-		if err != nil {
+		if console, err = consolepkg.New(); err != nil {
 			return -1, err
 		}
 
-		go io.Copy(master, os.Stdin)
-		go io.Copy(os.Stdout, master)
+		go io.Copy(console.Master(), os.Stdin)
+		go io.Copy(os.Stdout, console.Master())
 
 		state, err := term.SetRawTerminal(os.Stdin.Fd())
 		if err != nil {
 			return -1, err
 		}
-
 		defer term.RestoreTerminal(os.Stdin.Fd(), state)
 	}
 
 	startCallback := func() {
 		go func() {
-			resizeTty(master)
+			resizeConsole(console)
 
 			for sig := range sigc {
 				switch sig {
 				case syscall.SIGWINCH:
-					resizeTty(master)
+					resizeConsole(console)
 				default:
 					cmd.Process.Signal(sig)
 				}
 			}
 		}()
 	}
-
 	return namespaces.Exec(container, stdin, stdout, stderr, console, dataPath, args, createCommand, startCallback)
 }
 
-func resizeTty(master *os.File) {
-	if master == nil {
+func resizeConsole(console consolepkg.Console) {
+	if console == nil {
 		return
 	}
-
 	ws, err := term.GetWinsize(os.Stdin.Fd())
 	if err != nil {
 		return
 	}
-
-	if err := term.SetWinsize(master.Fd(), ws); err != nil {
-		return
-	}
+	term.SetWinsize(console.Master().Fd(), ws)
 }

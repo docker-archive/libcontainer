@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/docker/libcontainer"
+	"github.com/docker/libcontainer/console"
 	"github.com/docker/libcontainer/namespaces"
 )
 
@@ -83,13 +84,16 @@ func copyBusybox(dest string) error {
 //
 // buffers are returned containing the STDOUT and STDERR output for the run
 // along with the exit code and any go error
-func runContainer(config *libcontainer.Config, console string, args ...string) (buffers *stdBuffers, exitCode int, err error) {
+func runContainer(config *libcontainer.Config, c console.Console, args ...string) (buffers *stdBuffers, exitCode int, err error) {
+	if c == nil {
+		c = console.Null()
+	}
 	if err := writeConfig(config); err != nil {
 		return nil, -1, err
 	}
 
 	buffers = newStdBuffers()
 	exitCode, err = namespaces.Exec(config, buffers.Stdin, buffers.Stdout, buffers.Stderr,
-		console, config.RootFs, args, namespaces.DefaultCreateCommand, nil)
+		c, config.RootFs, args, namespaces.DefaultCreateCommand, nil)
 	return
 }

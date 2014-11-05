@@ -18,7 +18,7 @@ func TestExecPS(t *testing.T) {
 	defer remove(rootfs)
 
 	config := newTemplateConfig(rootfs)
-	buffers, exitCode, err := runContainer(config, "", "ps")
+	buffers, exitCode, err := runContainer(config, nil, "ps")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestIPCPrivate(t *testing.T) {
 
 	config := newTemplateConfig(rootfs)
 	config.Namespaces["NEWIPC"] = true
-	buffers, exitCode, err := runContainer(config, "", "readlink", "/proc/self/ns/ipc")
+	buffers, exitCode, err := runContainer(config, nil, "readlink", "/proc/self/ns/ipc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestIPCHost(t *testing.T) {
 
 	config := newTemplateConfig(rootfs)
 	config.Namespaces["NEWIPC"] = false
-	buffers, exitCode, err := runContainer(config, "", "readlink", "/proc/self/ns/ipc")
+	buffers, exitCode, err := runContainer(config, nil, "readlink", "/proc/self/ns/ipc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestIPCJoinPath(t *testing.T) {
 	config.Namespaces["NEWIPC"] = false
 	config.IpcNsPath = "/proc/1/ns/ipc"
 
-	buffers, exitCode, err := runContainer(config, "", "readlink", "/proc/self/ns/ipc")
+	buffers, exitCode, err := runContainer(config, nil, "readlink", "/proc/self/ns/ipc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestIPCBadPath(t *testing.T) {
 	config.Namespaces["NEWIPC"] = false
 	config.IpcNsPath = "/proc/1/ns/ipcc"
 
-	_, _, err = runContainer(config, "", "true")
+	_, _, err = runContainer(config, nil, "true")
 	if err == nil {
 		t.Fatal("container succeded with bad ipc path")
 	}
