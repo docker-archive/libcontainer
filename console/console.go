@@ -5,124 +5,96 @@ package console
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"syscall"
 	"unsafe"
-
-	"github.com/docker/libcontainer/label"
 )
 
-// Setup initializes the proper /dev/console inside the rootfs path
-func Setup(rootfs, consolePath, mountLabel string) error {
-	oldMask := syscall.Umask(0000)
-	defer syscall.Umask(oldMask)
-
-	if err := os.Chmod(consolePath, 0600); err != nil {
-		return err
-	}
-
-	if err := os.Chown(consolePath, 0, 0); err != nil {
-		return err
-	}
-
-	if err := label.SetFileLabel(consolePath, mountLabel); err != nil {
-		return fmt.Errorf("set file label %s %s", consolePath, err)
-	}
-
-	dest := filepath.Join(rootfs, "dev/console")
-
-	f, err := os.Create(dest)
-	if err != nil && !os.IsExist(err) {
-		return fmt.Errorf("create %s %s", dest, err)
-	}
-
-	if f != nil {
-		f.Close()
-	}
-
-	if err := syscall.Mount(consolePath, dest, "bind", syscall.MS_BIND, ""); err != nil {
-		return fmt.Errorf("bind %s to %s %s", consolePath, dest, err)
-	}
-
-	return nil
+type Console interface {
+	// Master returns the master pair of the TTY
+	Master() *os.File
+	// Path is the path to the slave pair of the TTY
+	Path() string
+	// Dup opens the slave and dup2 STDIN, STDOUT, STDERR of the current process
+	Dup() error
+	// Setctty sets ctty for the current process
+	Setctty() error
+	// Bind binds the console to the rootfs applying the current mount label
+	Bind(rootfs, mountLabel string) error
 }
 
-func OpenAndDup(consolePath string) error {
-	slave, err := OpenTerminal(consolePath, syscall.O_RDWR)
-	if err != nil {
-		return fmt.Errorf("open terminal %s", err)
-	}
-
-	if err := syscall.Dup2(int(slave.Fd()), 0); err != nil {
-		return err
-	}
-
-	if err := syscall.Dup2(int(slave.Fd()), 1); err != nil {
-		return err
-	}
-
-	return syscall.Dup2(int(slave.Fd()), 2)
-}
-
-// Unlockpt unlocks the slave pseudoterminal device corresponding to the master pseudoterminal referred to by f.
-// Unlockpt should be called before opening the slave side of a pseudoterminal.
-func Unlockpt(f *os.File) error {
-	var u int32
-
-	return Ioctl(f.Fd(), syscall.TIOCSPTLCK, uintptr(unsafe.Pointer(&u)))
-}
-
-// Ptsname retrieves the name of the first available pts for the given master.
-func Ptsname(f *os.File) (string, error) {
-	var n int32
-
-	if err := Ioctl(f.Fd(), syscall.TIOCGPTN, uintptr(unsafe.Pointer(&n))); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("/dev/pts/%d", n), nil
-}
+// Testing dependencies
+var (
+	openFile = os.OpenFile
+)
 
 // CreateMasterAndConsole will open /dev/ptmx on the host and retreive the
 // pts name for use as the pty slave inside the container
-func CreateMasterAndConsole() (*os.File, string, error) {
-	master, err := os.OpenFile("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
+func New() (Console, error) {
+	master, err := openFile("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-
-	console, err := Ptsname(master)
+	console, err := ptsname(master)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-
-	if err := Unlockpt(master); err != nil {
-		return nil, "", err
+	if err := unlockpt(master); err != nil {
+		return nil, err
 	}
-
-	return master, console, nil
+	return &linuxConsole{
+		master: master,
+		path:   console,
+	}, nil
 }
 
-// OpenPtmx opens /dev/ptmx, i.e. the PTY master.
-func OpenPtmx() (*os.File, error) {
+func FromPath(path string) Console {
+	if path == "" {
+		return Null()
+	}
+	return &linuxConsole{
+		path: path,
+	}
+}
+
+func Null() Console {
+	return &nullConsole{}
+}
+
+// unlockpt unlocks the slave pseudoterminal device corresponding to the master pseudoterminal referred to by f.
+// unlockpt should be called before opening the slave side of a pseudoterminal.
+var unlockpt = func(f *os.File) error {
+	var u int32
+	return ioctl(f.Fd(), syscall.TIOCSPTLCK, uintptr(unsafe.Pointer(&u)))
+}
+
+// ptsname retrieves the name of the first available pts for the given master.
+var ptsname = func(f *os.File) (string, error) {
+	var n int32
+	if err := ioctl(f.Fd(), syscall.TIOCGPTN, uintptr(unsafe.Pointer(&n))); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("/dev/pts/%d", n), nil
+}
+
+// openPtmx opens /dev/ptmx, i.e. the PTY master.
+func openPtmx() (*os.File, error) {
 	// O_NOCTTY and O_CLOEXEC are not present in os package so we use the syscall's one for all.
 	return os.OpenFile("/dev/ptmx", syscall.O_RDONLY|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
 }
 
-// OpenTerminal is a clone of os.OpenFile without the O_CLOEXEC
+// openTerminal is a clone of os.OpenFile without the O_CLOEXEC
 // used to open the pty slave inside the container namespace
-func OpenTerminal(name string, flag int) (*os.File, error) {
-	r, e := syscall.Open(name, flag, 0)
-	if e != nil {
-		return nil, &os.PathError{Op: "open", Path: name, Err: e}
+func openTerminal(name string, flag int) (*os.File, error) {
+	r, err := open(name, flag, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: name, Err: err}
 	}
 	return os.NewFile(uintptr(r), name), nil
 }
 
-func Ioctl(fd uintptr, flag, data uintptr) error {
+func ioctl(fd uintptr, flag, data uintptr) error {
 	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd, flag, data); err != 0 {
 		return err
 	}
-
 	return nil
 }

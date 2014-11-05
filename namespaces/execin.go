@@ -14,6 +14,7 @@ import (
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/apparmor"
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/console"
 	"github.com/docker/libcontainer/label"
 	"github.com/docker/libcontainer/syncpipe"
 	"github.com/docker/libcontainer/system"
@@ -22,12 +23,12 @@ import (
 // ExecIn reexec's the initPath with the argv 0 rewrite to "nsenter" so that it is able to run the
 // setns code in a single threaded environment joining the existing containers' namespaces.
 func ExecIn(container *libcontainer.Config, state *libcontainer.State, userArgs []string, initPath, action string,
-	stdin io.Reader, stdout, stderr io.Writer, console string, startCallback func(*exec.Cmd)) (int, error) {
+	stdin io.Reader, stdout, stderr io.Writer, c console.Console, startCallback func(*exec.Cmd)) (int, error) {
 
 	args := []string{fmt.Sprintf("nsenter-%s", action), "--nspid", strconv.Itoa(state.InitPid)}
 
-	if console != "" {
-		args = append(args, "--console", console)
+	if c.Path() != "" {
+		args = append(args, "--console", c.Path())
 	}
 
 	cmd := &exec.Cmd{

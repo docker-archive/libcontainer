@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/docker/libcontainer/console"
 	"github.com/docker/libcontainer/label"
 	"github.com/docker/libcontainer/mount/nodes"
 )
@@ -25,7 +26,7 @@ type mount struct {
 
 // InitializeMountNamespace sets up the devices, mount points, and filesystems for use inside a
 // new mount namespace.
-func InitializeMountNamespace(rootfs, console string, sysReadonly bool, mountConfig *MountConfig) error {
+func InitializeMountNamespace(rootfs string, c console.Console, sysReadonly bool, mountConfig *MountConfig) error {
 	var (
 		err  error
 		flag = syscall.MS_PRIVATE
@@ -34,34 +35,27 @@ func InitializeMountNamespace(rootfs, console string, sysReadonly bool, mountCon
 	if mountConfig.NoPivotRoot {
 		flag = syscall.MS_SLAVE
 	}
-
 	if err := syscall.Mount("", "/", "", uintptr(flag|syscall.MS_REC), ""); err != nil {
 		return fmt.Errorf("mounting / with flags %X %s", (flag | syscall.MS_REC), err)
 	}
-
 	if err := syscall.Mount(rootfs, rootfs, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
 		return fmt.Errorf("mouting %s as bind %s", rootfs, err)
 	}
-
 	if err := mountSystem(rootfs, sysReadonly, mountConfig); err != nil {
 		return fmt.Errorf("mount system %s", err)
 	}
-
 	// apply any user specified mounts within the new mount namespace
 	for _, m := range mountConfig.Mounts {
 		if err := m.Mount(rootfs, mountConfig.MountLabel); err != nil {
 			return err
 		}
 	}
-
 	if err := nodes.CreateDeviceNodes(rootfs, mountConfig.DeviceNodes); err != nil {
 		return fmt.Errorf("create device nodes %s", err)
 	}
-
-	if err := SetupPtmx(rootfs, console, mountConfig.MountLabel); err != nil {
+	if err := SetupPtmx(rootfs, c, mountConfig.MountLabel); err != nil {
 		return err
 	}
-
 	// stdin, stdout and stderr could be pointing to /dev/null from parent namespace.
 	// Re-open them inside this namespace.
 	if err := reOpenDevNull(rootfs); err != nil {
