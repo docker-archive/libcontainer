@@ -22,10 +22,15 @@ type Console interface {
 	Bind(rootfs, mountLabel string) error
 }
 
+// Testing dependencies
+var (
+	openFile = os.OpenFile
+)
+
 // CreateMasterAndConsole will open /dev/ptmx on the host and retreive the
 // pts name for use as the pty slave inside the container
 func New() (Console, error) {
-	master, err := os.OpenFile("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
+	master, err := openFile("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +41,6 @@ func New() (Console, error) {
 	if err := unlockpt(master); err != nil {
 		return nil, err
 	}
-
 	return &linuxConsole{
 		master: master,
 		path:   console,
@@ -58,13 +62,13 @@ func Null() Console {
 
 // unlockpt unlocks the slave pseudoterminal device corresponding to the master pseudoterminal referred to by f.
 // unlockpt should be called before opening the slave side of a pseudoterminal.
-func unlockpt(f *os.File) error {
+var unlockpt = func(f *os.File) error {
 	var u int32
 	return ioctl(f.Fd(), syscall.TIOCSPTLCK, uintptr(unsafe.Pointer(&u)))
 }
 
 // ptsname retrieves the name of the first available pts for the given master.
-func ptsname(f *os.File) (string, error) {
+var ptsname = func(f *os.File) (string, error) {
 	var n int32
 	if err := ioctl(f.Fd(), syscall.TIOCGPTN, uintptr(unsafe.Pointer(&n))); err != nil {
 		return "", err
@@ -81,9 +85,9 @@ func openPtmx() (*os.File, error) {
 // openTerminal is a clone of os.OpenFile without the O_CLOEXEC
 // used to open the pty slave inside the container namespace
 func openTerminal(name string, flag int) (*os.File, error) {
-	r, e := syscall.Open(name, flag, 0)
-	if e != nil {
-		return nil, &os.PathError{Op: "open", Path: name, Err: e}
+	r, err := open(name, flag, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: name, Err: err}
 	}
 	return os.NewFile(uintptr(r), name), nil
 }

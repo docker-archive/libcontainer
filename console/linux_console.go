@@ -10,6 +10,18 @@ import (
 	"github.com/docker/libcontainer/system"
 )
 
+// Testing dependencies
+var (
+	dup2         = syscall.Dup2
+	open         = syscall.Open
+	umask        = syscall.Umask
+	chmod        = os.Chmod
+	chown        = os.Chown
+	setFileLabel = label.SetFileLabel
+	create       = os.Create
+	mount        = syscall.Mount
+)
+
 type linuxConsole struct {
 	master *os.File
 	path   string
@@ -31,7 +43,7 @@ func (c *linuxConsole) Dup() error {
 	}
 	fd := int(slave.Fd())
 	for i := 0; i < 3; i++ {
-		if err := syscall.Dup2(fd, i); err != nil {
+		if err := dup2(fd, i); err != nil {
 			return err
 		}
 	}
@@ -44,25 +56,25 @@ func (c *linuxConsole) Setctty() error {
 
 // Bind initializes the proper /dev/console inside the rootfs path
 func (c *linuxConsole) Bind(rootfs, mountLabel string) error {
-	oldMask := syscall.Umask(0000)
-	defer syscall.Umask(oldMask)
+	oldMask := umask(0000)
+	defer umask(oldMask)
 
-	if err := os.Chmod(c.path, 0600); err != nil {
+	if err := chmod(c.path, 0600); err != nil {
 		return err
 	}
-	if err := os.Chown(c.path, 0, 0); err != nil {
+	if err := chown(c.path, 0, 0); err != nil {
 		return err
 	}
-	if err := label.SetFileLabel(c.path, mountLabel); err != nil {
+	if err := setFileLabel(c.path, mountLabel); err != nil {
 		return fmt.Errorf("set file label %s %s", c.path, err)
 	}
 	dest := filepath.Join(rootfs, "dev/console")
-	f, err := os.Create(dest)
+	f, err := create(dest)
 	if err == nil {
 		f.Close()
 	}
 	if err != nil && !os.IsExist(err) {
 		return fmt.Errorf("create %s %s", dest, err)
 	}
-	return syscall.Mount(c.path, dest, "bind", syscall.MS_BIND, "")
+	return mount(c.path, dest, "bind", syscall.MS_BIND, "")
 }
