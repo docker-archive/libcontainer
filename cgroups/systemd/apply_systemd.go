@@ -4,9 +4,9 @@ package systemd
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,7 +24,6 @@ type systemdCgroup struct {
 }
 
 type subsystem interface {
-	GetStats(string, *cgroups.Stats) error
 }
 
 var (
@@ -93,17 +92,13 @@ func getIfaceForUnit(unitName string) string {
 
 func Apply(c *cgroups.Cgroup, pid int) (cgroups.ActiveCgroup, error) {
 	var (
-		unitName   = getUnitName(c)
-		slice      = "system.slice"
+		unitName   = c.Name
+		slice      = path.Base(c.Parent)
 		properties []systemd.Property
 		res        = &systemdCgroup{}
 	)
 
 	res.cgroup = c
-
-	if c.Slice != "" {
-		slice = c.Slice
-	}
 
 	properties = append(properties,
 		systemd.PropSlice(slice),
@@ -224,12 +219,7 @@ func getSubsystemPath(c *cgroups.Cgroup, subsystem string) (string, error) {
 		return "", err
 	}
 
-	slice := "system.slice"
-	if c.Slice != "" {
-		slice = c.Slice
-	}
-
-	return filepath.Join(mountpoint, initPath, slice, getUnitName(c)), nil
+	return filepath.Join(mountpoint, initPath, c.Parent, c.Name), nil
 }
 
 func Freeze(c *cgroups.Cgroup, state cgroups.FreezerState) error {
@@ -261,39 +251,6 @@ func GetPids(c *cgroups.Cgroup) ([]int, error) {
 	}
 
 	return cgroups.ReadProcsFile(path)
-}
-
-func getUnitName(c *cgroups.Cgroup) string {
-	return fmt.Sprintf("%s-%s.scope", c.Parent, c.Name)
-}
-
-/*
- * This would be nicer to get from the systemd API when accounting
- * is enabled, but sadly there is no way to do that yet.
- * The lack of this functionality in the API & the approach taken
- * is guided by
- * http://www.freedesktop.org/wiki/Software/systemd/ControlGroupInterface/#readingaccountinginformation.
- */
-func GetStats(c *cgroups.Cgroup) (*cgroups.Stats, error) {
-	stats := cgroups.NewStats()
-
-	for sysname, sys := range subsystems {
-		subsystemPath, err := getSubsystemPath(c, sysname)
-		if err != nil {
-			// Don't fail if a cgroup hierarchy was not found, just skip this subsystem
-			if cgroups.IsNotFound(err) {
-				continue
-			}
-
-			return nil, err
-		}
-
-		if err := sys.GetStats(subsystemPath, stats); err != nil {
-			return nil, err
-		}
-	}
-
-	return stats, nil
 }
 
 // Atm we can't use the systemd device support because of two missing things:
