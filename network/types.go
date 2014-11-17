@@ -17,6 +17,9 @@ type Network struct {
 	// Prefix for the veth interfaces.
 	VethPrefix string `json:"veth_prefix,omitempty"`
 
+	// Name of the dummy interface.
+	DummyName string `json:"dummy_name,omitempty"`
+
 	// MacAddress contains the MAC address to set on the network interface
 	MacAddress string `json:"mac_address,omitempty"`
 
