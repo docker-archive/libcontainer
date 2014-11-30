@@ -17,7 +17,7 @@ type Veth struct {
 
 const defaultDevice = "eth0"
 
-func (v *Veth) Create(n *Network, nspid int, networkState *NetworkState) error {
+func (v *Veth) Create(n *Network, nspath string, networkState *NetworkState) error {
 	var (
 		bridge     = n.Bridge
 		prefix     = n.VethPrefix
@@ -42,9 +42,11 @@ func (v *Veth) Create(n *Network, nspid int, networkState *NetworkState) error {
 	if err := InterfaceUp(name1); err != nil {
 		return err
 	}
-	if err := SetInterfaceInNamespacePid(name2, nspid); err != nil {
+
+	if err := SetInterfaceInNamespacePath(name2, nspath); err != nil {
 		return err
 	}
+	networkState.NsPath = nspath
 	networkState.VethHost = name1
 	networkState.VethChild = name2
 
@@ -55,6 +57,13 @@ func (v *Veth) Initialize(config *Network, networkState *NetworkState) error {
 	var vethChild = networkState.VethChild
 	if vethChild == "" {
 		return fmt.Errorf("vethChild is not specified")
+	}
+	if networkState.NsPath == "" {
+		return fmt.Errorf("nspath does is not specified in NetworkState")
+	}
+
+	if err := SetNs(networkState.NsPath); err != nil {
+		return err
 	}
 	if err := InterfaceDown(vethChild); err != nil {
 		return fmt.Errorf("interface down %s %s", vethChild, err)

@@ -4,9 +4,11 @@ package namespaces
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 
 	"github.com/docker/libcontainer"
@@ -67,7 +69,12 @@ func Exec(container *libcontainer.Config, stdin io.Reader, stdout, stderr io.Wri
 	defer cgroups.RemovePaths(cgroupPaths)
 
 	var networkState network.NetworkState
-	if err := InitializeNetworking(container, command.Process.Pid, &networkState); err != nil {
+	netNsDescr := GetNamespace("NEWNET")
+	if netNsDescr == nil {
+		return terminate(ErrUnknownNamespace)
+	}
+	netNsPath := filepath.Join(fmt.Sprintf("/proc/%d", command.Process.Pid), netNsDescr.File)
+	if err := InitializeNetworking(container, netNsPath, &networkState); err != nil {
 		return terminate(err)
 	}
 	// send the state to the container's init process then shutdown writes for the parent
@@ -161,13 +168,13 @@ func SetupCgroups(container *libcontainer.Config, nspid int) (map[string]string,
 
 // InitializeNetworking creates the container's network stack outside of the namespace and moves
 // interfaces into the container's net namespaces if necessary
-func InitializeNetworking(container *libcontainer.Config, nspid int, networkState *network.NetworkState) error {
+func InitializeNetworking(container *libcontainer.Config, nspath string, networkState *network.NetworkState) error {
 	for _, config := range container.Networks {
 		strategy, err := network.GetStrategy(config.Type)
 		if err != nil {
 			return err
 		}
-		if err := strategy.Create((*network.Network)(config), nspid, networkState); err != nil {
+		if err := strategy.Create((*network.Network)(config), nspath, networkState); err != nil {
 			return err
 		}
 	}

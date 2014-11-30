@@ -3,8 +3,10 @@ package utils
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -52,4 +54,14 @@ func CloseExecFrom(minFd int) error {
 		// the cases where this might fail are basically file descriptors that have already been closed (including and especially the one that was created when ioutil.ReadDir did the "opendir" syscall)
 	}
 	return nil
+}
+
+func GetFd(path string) (uintptr, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY, 0)
+	if err != nil {
+		return 0, fmt.Errorf("failed get namespace fd: %v", err)
+	}
+	fd := f.Fd()
+	f.Close()
+	return fd, nil
 }
