@@ -18,6 +18,7 @@ import (
 	"github.com/docker/libcontainer/mount"
 	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libcontainer/network"
+	"github.com/docker/libcontainer/pidns"
 	"github.com/docker/libcontainer/security/capabilities"
 	"github.com/docker/libcontainer/security/restrict"
 	"github.com/docker/libcontainer/system"
@@ -81,6 +82,9 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, pip
 	}
 	if err := ipc.Initialize(container.IpcNsPath); err != nil {
 		return fmt.Errorf("setup IPC %s", err)
+	}
+	if err := pidns.Initialize(container.PidNsPath); err != nil {
+		return fmt.Errorf("setup PIDNS %s", err)
 	}
 	if err := setupNetwork(container, networkState); err != nil {
 		return fmt.Errorf("setup networking %s", err)
