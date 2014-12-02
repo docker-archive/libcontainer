@@ -50,6 +50,9 @@ type Config struct {
 	// Ipc specifies the container's ipc setup to be created
 	IpcNsPath string `json:"ipc,omitempty"`
 
+	// PidNS specifies the container's pid setup to be created
+	PidNsPath string `json:"pidns,omitempty"`
+
 	// Routes can be specified to create entries in the route table as the container is started
 	Routes []*Route `json:"routes,omitempty"`
 
