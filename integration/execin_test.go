@@ -1,15 +1,20 @@
 package integration
 
 import (
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/cgroups/fs"
+	"github.com/docker/libcontainer/cgroups/systemd"
 	"github.com/docker/libcontainer/namespaces"
 )
 
@@ -84,6 +89,16 @@ func TestExecInCgroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer remove(rootfs)
+	// write our test script for spawning background process
+	err = ioutil.WriteFile(filepath.Join(rootfs, "test-orphan"), []byte(`
+	exec 0>&-
+	exec 1>&-
+	exec 2>&-
+	(sleep 5 &)
+	`), 755)
+	if err != nil {
+		t.Fatalf("failed to write test script %s", err)
+	}
 
 	config := newTemplateConfig(rootfs)
 	if err := writeConfig(config); err != nil {
@@ -116,19 +131,16 @@ func TestExecInCgroup(t *testing.T) {
 	var execWait sync.WaitGroup
 	execWait.Add(1)
 	go func() {
-		_, err := namespaces.ExecIn(execConfig, []string{"ps"},
+		_, err := namespaces.ExecIn(execConfig, []string{"sh", "-c", "/test-orphan"},
 			os.Args[0], "exec", buffers.Stdin, buffers.Stdout, buffers.Stderr,
 			"", func(cmd *exec.Cmd) {
-				pid := cmd.Process.Pid
-				paths := map[string]string{}
-				for k, v := range state.CgroupPaths {
-					paths[k] = filepath.Join(v, "exec-123456")
-					if _, err := os.Stat(paths[k]); err != nil {
-						t.Errorf("invalid cgroups %q, err %q", paths[k], err)
-					}
+				defer execWait.Done()
+				time.Sleep(100 * time.Millisecond) // wait for the background task to spawn
+				pids, err := getPids(execConfig.Cgroups)
+				// sleep should be contained here
+				if err != nil || len(pids) == 0 {
+					t.Errorf("failed to setup cgroup for the process")
 				}
-				assertCgroups(t, paths, pid)
-				execWait.Done()
 			})
 		execWait.Wait()
 		execErr <- err
@@ -137,9 +149,12 @@ func TestExecInCgroup(t *testing.T) {
 		t.Fatalf("exec finished with error %s", err)
 	}
 
-	out := buffers.Stdout.String()
-	if !strings.Contains(out, "sleep 10") || !strings.Contains(out, "ps") {
-		t.Fatalf("unexpected running process, output %q", out)
+	// exec's cgroups should be cleaned up when finished
+	for _, v := range state.CgroupPaths {
+		p := filepath.Join(v, "exec-123456")
+		if _, err := os.Stat(p); err == nil {
+			t.Errorf("failed to removed cgroups %q", p)
+		}
 	}
 }
 
@@ -248,4 +263,15 @@ func assertCgroups(t *testing.T, paths map[string]string, pid int) {
 			t.Errorf("cgroups %q does not contain exec pid %d", p, pid)
 		}
 	}
+}
+
+// getPids return the current pids, sorted in the cgroup
+func getPids(c *cgroups.Cgroup) (pids []int, err error) {
+	if systemd.UseSystemd() {
+		pids, err = systemd.GetPids(c)
+	} else {
+		pids, err = fs.GetPids(c)
+	}
+	sort.Ints(pids)
+	return pids, err
 }

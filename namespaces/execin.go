@@ -79,15 +79,20 @@ func ExecIn(config *libcontainer.ExecConfig, userArgs []string, initPath, action
 		}
 	} else {
 		config.Cgroups.Parent = filepath.Join(container.Cgroups.Parent, container.Cgroups.Name)
+
+		var cgroupPaths map[string]string
 		if systemd.UseSystemd() {
-			if _, err := systemd.Apply(config.Cgroups, cmd.Process.Pid); err != nil {
+			cgroupPaths, err = systemd.Apply(config.Cgroups, cmd.Process.Pid)
+			if err != nil {
 				return terminate(err)
 			}
 		} else {
-			if _, err := fs.Apply(config.Cgroups, cmd.Process.Pid); err != nil {
+			cgroupPaths, err = fs.Apply(config.Cgroups, cmd.Process.Pid)
+			if err != nil {
 				return terminate(err)
 			}
 		}
+		defer cgroups.RemovePaths(cgroupPaths)
 	}
 
 	// finish cgroups' setup, unblock the child process.
