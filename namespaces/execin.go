@@ -15,8 +15,6 @@ import (
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/apparmor"
 	"github.com/docker/libcontainer/cgroups"
-	"github.com/docker/libcontainer/cgroups/fs"
-	"github.com/docker/libcontainer/cgroups/systemd"
 	"github.com/docker/libcontainer/label"
 	"github.com/docker/libcontainer/system"
 )
@@ -80,17 +78,9 @@ func ExecIn(config *libcontainer.ExecConfig, userArgs []string, initPath, action
 	} else {
 		config.Cgroups.Parent = filepath.Join(container.Cgroups.Parent, container.Cgroups.Name)
 
-		var cgroupPaths map[string]string
-		if systemd.UseSystemd() {
-			cgroupPaths, err = systemd.Apply(config.Cgroups, cmd.Process.Pid)
-			if err != nil {
-				return terminate(err)
-			}
-		} else {
-			cgroupPaths, err = fs.Apply(config.Cgroups, cmd.Process.Pid)
-			if err != nil {
-				return terminate(err)
-			}
+		cgroupPaths, err := setupCgroups(config.Cgroups, cmd.Process.Pid)
+		if err != nil {
+			return terminate(err)
 		}
 		defer cgroups.RemovePaths(cgroupPaths)
 	}
