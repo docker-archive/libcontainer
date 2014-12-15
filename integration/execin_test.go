@@ -73,14 +73,63 @@ func TestExecIn(t *testing.T) {
 		t.Fatalf("unexpected running process, output %q", out)
 	}
 }
-		}
-		execWait.Done()
+
+func TestExecInCgroup(t *testing.T) {
+	if testing.Short() {
+		return
 	}
+
+	rootfs, err := newRootFs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remove(rootfs)
+
+	config := newTemplateConfig(rootfs)
+	if err := writeConfig(config); err != nil {
+		t.Fatalf("failed to write config %s", err)
+	}
+
+	containerCmd, statePath, containerErr := startLongRunningContainer(config)
+	defer func() {
+		// kill the container
+		if containerCmd.Process != nil {
+			containerCmd.Process.Kill()
+		}
+		if err := <-containerErr; err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// start the exec process
+	state, err := libcontainer.GetState(statePath)
+	if err != nil {
+		t.Fatalf("failed to get state %s", err)
+	}
+	buffers := newStdBuffers()
+	execErr := make(chan error, 1)
+	execConfig := &libcontainer.ExecConfig{
+		Container: config,
+		State:     state,
+		Cgroups:   &cgroups.Cgroup{Name: "exec-123456"},
+	}
+	var execWait sync.WaitGroup
 	execWait.Add(1)
 	go func() {
 		_, err := namespaces.ExecIn(execConfig, []string{"ps"},
 			os.Args[0], "exec", buffers.Stdin, buffers.Stdout, buffers.Stderr,
-			"", startCallback)
+			"", func(cmd *exec.Cmd) {
+				pid := cmd.Process.Pid
+				paths := map[string]string{}
+				for k, v := range state.CgroupPaths {
+					paths[k] = filepath.Join(v, "exec-123456")
+					if _, err := os.Stat(paths[k]); err != nil {
+						t.Errorf("invalid cgroups %q, err %q", paths[k], err)
+					}
+				}
+				assertCgroups(t, paths, pid)
+				execWait.Done()
+			})
 		execWait.Wait()
 		execErr <- err
 	}()

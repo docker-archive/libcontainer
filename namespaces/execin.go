@@ -15,6 +15,8 @@ import (
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/apparmor"
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/cgroups/fs"
+	"github.com/docker/libcontainer/cgroups/systemd"
 	"github.com/docker/libcontainer/label"
 	"github.com/docker/libcontainer/system"
 )
@@ -74,6 +76,17 @@ func ExecIn(config *libcontainer.ExecConfig, userArgs []string, initPath, action
 		// Enter existing cgroups of the container
 		if err := EnterCgroups(state, cmd.Process.Pid); err != nil {
 			return terminate(err)
+		}
+	} else {
+		config.Cgroups.Parent = filepath.Join(container.Cgroups.Parent, container.Cgroups.Name)
+		if systemd.UseSystemd() {
+			if _, err := systemd.Apply(config.Cgroups, cmd.Process.Pid); err != nil {
+				return terminate(err)
+			}
+		} else {
+			if _, err := fs.Apply(config.Cgroups, cmd.Process.Pid); err != nil {
+				return terminate(err)
+			}
 		}
 	}
 
