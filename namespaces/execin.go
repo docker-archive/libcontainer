@@ -21,8 +21,10 @@ import (
 
 // ExecIn reexec's the initPath with the argv 0 rewrite to "nsenter" so that it is able to run the
 // setns code in a single threaded environment joining the existing containers' namespaces.
-func ExecIn(container *libcontainer.Config, state *libcontainer.State, userArgs []string, initPath, action string,
+func ExecIn(config *libcontainer.ExecConfig, userArgs []string, initPath, action string,
 	stdin io.Reader, stdout, stderr io.Writer, console string, startCallback func(*exec.Cmd)) (int, error) {
+	state := config.State
+	container := config.Container
 
 	args := []string{fmt.Sprintf("nsenter-%s", action), "--nspid", strconv.Itoa(state.InitPid)}
 
@@ -68,9 +70,11 @@ func ExecIn(container *libcontainer.Config, state *libcontainer.State, userArgs 
 		return -1, terr
 	}
 
-	// Enter cgroups.
-	if err := EnterCgroups(state, cmd.Process.Pid); err != nil {
-		return terminate(err)
+	if config.Cgroups == nil {
+		// Enter existing cgroups of the container
+		if err := EnterCgroups(state, cmd.Process.Pid); err != nil {
+			return terminate(err)
+		}
 	}
 
 	// finish cgroups' setup, unblock the child process.

@@ -3,11 +3,13 @@ package integration
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/docker/libcontainer"
+	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/namespaces"
 )
 
@@ -45,10 +47,41 @@ func TestExecIn(t *testing.T) {
 	}
 	buffers := newStdBuffers()
 	execErr := make(chan error, 1)
+	execConfig := &libcontainer.ExecConfig{
+		Container: config,
+		State:     state,
+	}
+	var execWait sync.WaitGroup
+	execWait.Add(1)
 	go func() {
-		_, err := namespaces.ExecIn(config, state, []string{"ps"},
+		_, err := namespaces.ExecIn(execConfig, []string{"ps"},
 			os.Args[0], "exec", buffers.Stdin, buffers.Stdout, buffers.Stderr,
-			"", nil)
+			"", func(cmd *exec.Cmd) {
+				pid := cmd.Process.Pid
+				assertCgroups(t, state.CgroupPaths, pid)
+				execWait.Done()
+			})
+		execWait.Wait()
+		execErr <- err
+	}()
+	if err := <-execErr; err != nil {
+		t.Fatalf("exec finished with error %s", err)
+	}
+
+	out := buffers.Stdout.String()
+	if !strings.Contains(out, "sleep 10") || !strings.Contains(out, "ps") {
+		t.Fatalf("unexpected running process, output %q", out)
+	}
+}
+		}
+		execWait.Done()
+	}
+	execWait.Add(1)
+	go func() {
+		_, err := namespaces.ExecIn(execConfig, []string{"ps"},
+			os.Args[0], "exec", buffers.Stdin, buffers.Stdout, buffers.Stderr,
+			"", startCallback)
+		execWait.Wait()
 		execErr <- err
 	}()
 	if err := <-execErr; err != nil {
@@ -95,8 +128,12 @@ func TestExecInRlimit(t *testing.T) {
 	}
 	buffers := newStdBuffers()
 	execErr := make(chan error, 1)
+	execConfig := &libcontainer.ExecConfig{
+		Container: config,
+		State:     state,
+	}
 	go func() {
-		_, err := namespaces.ExecIn(config, state, []string{"/bin/sh", "-c", "ulimit -n"},
+		_, err := namespaces.ExecIn(execConfig, []string{"/bin/sh", "-c", "ulimit -n"},
 			os.Args[0], "exec", buffers.Stdin, buffers.Stdout, buffers.Stderr,
 			"", nil)
 		execErr <- err
@@ -137,4 +174,29 @@ func startLongRunningContainer(config *libcontainer.Config) (*exec.Cmd, string, 
 	containerStart.Wait()
 
 	return containerCmd, statePath, containerErr
+}
+
+// asserts that process pid joined the cgroups paths. Non-existing cgroup paths
+// are ignored
+func assertCgroups(t *testing.T, paths map[string]string, pid int) {
+	for _, p := range paths {
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		pids, err := cgroups.ReadProcsFile(p)
+		if err != nil {
+			t.Errorf("failed to read procs in %q", p)
+			continue
+		}
+		var found bool
+		for _, procPID := range pids {
+			if procPID == pid {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("cgroups %q does not contain exec pid %d", p, pid)
+		}
+	}
 }
