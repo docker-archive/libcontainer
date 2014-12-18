@@ -116,10 +116,15 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, pip
 		return fmt.Errorf("set process label %s", err)
 	}
 
-	// TODO: (crosbymichael) make this configurable at the Config level
 	if container.RestrictSys {
-		if err := restrict.Restrict("proc/sys", "proc/sysrq-trigger", "proc/irq", "proc/bus"); err != nil {
-			return err
+		if len(container.RestrictedSysEntries) == 0 {
+			if err := restrict.Restrict("proc/sys", "proc/sysrq-trigger", "proc/irq", "proc/bus"); err != nil {
+				return err
+			}
+		} else {
+			if err := restrict.Restrict(container.RestrictedSysEntries...); err != nil {
+				return err
+			}
 		}
 	}
 
