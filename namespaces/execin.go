@@ -15,6 +15,8 @@ import (
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/apparmor"
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/cgroups/fs"
+	"github.com/docker/libcontainer/cgroups/systemd"
 	"github.com/docker/libcontainer/label"
 	"github.com/docker/libcontainer/system"
 )
@@ -72,6 +74,9 @@ func ExecIn(config *libcontainer.ExecConfig, userArgs []string, initPath, action
 
 	if config.Cgroups == nil {
 		// Enter existing cgroups of the container
+		// In this case, we cant keep track of individual execin session to
+		// clean up orphan processes, so just try to remove the main process
+		// when it fail
 		if err := EnterCgroups(state, cmd.Process.Pid); err != nil {
 			return terminate(err)
 		}
@@ -82,7 +87,7 @@ func ExecIn(config *libcontainer.ExecConfig, userArgs []string, initPath, action
 		if err != nil {
 			return terminate(err)
 		}
-		defer cgroups.RemovePaths(cgroupPaths)
+		defer cleanupCgroups(config.Cgroups, cgroupPaths)
 	}
 
 	// finish cgroups' setup, unblock the child process.
@@ -141,4 +146,20 @@ func FinalizeSetns(container *libcontainer.Config, args []string) error {
 
 func EnterCgroups(state *libcontainer.State, pid int) error {
 	return cgroups.EnterPid(state.CgroupPaths, pid)
+}
+
+// cleanup remaining tasks in the cgroup and then remove the cgroups
+func cleanupCgroups(c *cgroups.Cgroup, paths map[string]string) error {
+	if c != nil {
+		if systemd.UseSystemd() {
+			if err := systemd.Stop(c); err != nil {
+				return err
+			}
+		} else {
+			if err := fs.Stop(c); err != nil {
+				return err
+			}
+		}
+	}
+	return cgroups.RemovePaths(paths)
 }
