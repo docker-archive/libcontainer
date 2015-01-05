@@ -2,10 +2,13 @@ package fs
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
+	"time"
 
 	"github.com/docker/libcontainer/cgroups"
 )
@@ -86,6 +89,93 @@ func Apply(c *cgroups.Cgroup, pid int) (map[string]string, error) {
 		paths[name] = p
 	}
 	return paths, nil
+}
+
+// Stop stops all processes in the current cgroup
+func Stop(c *cgroups.Cgroup) error {
+	d, err := getCgroupData(c, 0)
+	if err != nil {
+		return err
+	}
+
+	// first we send SIGTERM to all tasks inside the cgroup
+	if err := Kill(c, syscall.SIGTERM); err != nil {
+		return err
+	}
+
+	// if failed to stop with only SIGTERM, we send SIGKILL
+	if err := waitStop(d, 100*time.Millisecond, 5*time.Second); err != nil {
+		if err := Kill(c, syscall.SIGKILL); err != nil {
+			return err
+		}
+		return waitStop(d, 100*time.Millisecond, -1*time.Second)
+	}
+	return nil
+}
+
+// Kill sends the signal to all processes in the current cgroup.
+// This assumes that the freezer cgroup is setup. It first freeze the cgroup,
+// send the signal to all processes inside the cgroup and then unfreeze it to
+// make sure that signal is sent to the processes before it has a chance to
+// do something else
+func Kill(c *cgroups.Cgroup, signal syscall.Signal) error {
+	Freeze(c, cgroups.Frozen)
+	defer Freeze(c, cgroups.Thawed)
+
+	pids, err := GetPids(c)
+	if err != nil {
+		return err
+	}
+
+	for _, pid := range pids {
+		if err := syscall.Kill(pid, signal); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// waitStop waits for all tasks in the given cgroup tasks to stop. If they
+// failed to stop after a given timeout, then this returns an error.
+//
+// if timeout is negative then we will wait forever for the tasks to be stopped
+func waitStop(d *data, interval time.Duration, timeout time.Duration) error {
+	freezerPath, err := d.path("freezer")
+	if err != nil {
+		return err
+	}
+	tasksPath := filepath.Join(freezerPath, CgroupProcesses)
+	f, err := os.Open(tasksPath)
+	if err != nil {
+		return fmt.Errorf("failed to open %q : %s", tasksPath, err)
+	}
+	defer f.Close()
+
+	done := make(chan struct{}, 1)
+	go func() {
+		for {
+			var pid int
+			_, err = fmt.Fscan(f, &pid)
+			if err == nil || err == io.EOF {
+				done <- struct{}{}
+				return
+			}
+			time.Sleep(interval)
+		}
+	}()
+
+	if timeout < 0 {
+		<-done
+		return nil
+	}
+
+	select {
+	case <-done:
+		return nil
+	case <-time.After(timeout):
+		return fmt.Errorf("timedout stopping freezer.tasks %q", tasksPath)
+	}
 }
 
 // Symmetrical public function to update device based cgroups.  Also available
