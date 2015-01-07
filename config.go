@@ -4,6 +4,7 @@ import (
 	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/mount"
 	"github.com/docker/libcontainer/network"
+	"github.com/docker/libcontainer/security/seccomp"
 )
 
 type MountConfig mount.MountConfig
@@ -120,6 +121,9 @@ type Config struct {
 	// Rlimits specifies the resource limits, such as max open files, to set in the container
 	// If Rlimits are not set, the container will inherit rlimits from the parent process
 	Rlimits []Rlimit `json:"rlimits,omitempty"`
+
+	// Syscalls which will be restricted on container start
+	Seccomps []seccomp.Seccomp `json:"seccomps,omitempty"`
 }
 
 // Routes can be specified to create entries in the route table as the container is started
