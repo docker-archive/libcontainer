@@ -3,8 +3,7 @@ all:
 	docker build -t dockercore/libcontainer .
 
 test: 
-	# we need NET_ADMIN for the netlink tests and SYS_ADMIN for mounting
-	docker run --rm -it --privileged dockercore/libcontainer
+	docker run --rm -it --privileged dockercore/libcontainer make TEST_TAGS="${TEST_TAGS}" direct-test
 
 sh:
 	docker run --rm -it --privileged -w /busybox dockercore/libcontainer nsinit exec sh

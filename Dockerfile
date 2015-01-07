@@ -1,5 +1,6 @@
 FROM golang:1.4
 
+RUN apt-get install -y libseccomp2 libseccomp-dev
 RUN go get golang.org/x/tools/cmd/cover
 
 ENV GOPATH $GOPATH:/go/src/github.com/docker/libcontainer/vendor
@@ -17,7 +18,7 @@ WORKDIR /go/src/github.com/docker/libcontainer
 RUN cp sample_configs/minimal.json /busybox/container.json
 
 RUN go get -d -v ./...
-RUN make direct-install
+RUN  TEST_TAGS="-tag seccomp" make direct-install
 
 ENTRYPOINT ["/dind"]
-CMD ["make", "direct-test"]
+CMD ["make", "TEST_TAGS=\"-tag seccomp\"", "direct-test"]

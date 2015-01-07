@@ -1,4 +1,4 @@
-// +build selinux,linux
+// +build selinux,linux,cgo
 
 package label
 
