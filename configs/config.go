@@ -1,6 +1,10 @@
 package configs
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/docker/libcontainer/security/seccomp"
+)
 
 type Rlimit struct {
 	Type int    `json:"type"`
@@ -96,6 +100,9 @@ type Config struct {
 	// ReadonlyPaths specifies paths within the container's rootfs to remount as read-only
 	// so that these files prevent any writes.
 	ReadonlyPaths []string `json:"readonly_paths"`
+
+	// SeccompConfig holds information on system calls to be restricted in the container
+	SeccompConfig seccomp.SeccompConfig `json:"seccomp_config,omitempty"`
 }
 
 // Gets the root uid for the process on host which could be non-zero

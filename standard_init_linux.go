@@ -9,6 +9,7 @@ import (
 	"github.com/docker/libcontainer/apparmor"
 	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/label"
+	"github.com/docker/libcontainer/security/seccomp"
 	"github.com/docker/libcontainer/system"
 )
 
@@ -75,6 +76,9 @@ func (l *linuxStandardInit) Init() error {
 	}
 	pdeath, err := system.GetParentDeathSignal()
 	if err != nil {
+		return err
+	}
+	if err := seccomp.InitSeccomp(l.config.Config.SeccompConfig); err != nil {
 		return err
 	}
 	if err := finalizeNamespace(l.config); err != nil {

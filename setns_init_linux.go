@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/libcontainer/apparmor"
 	"github.com/docker/libcontainer/label"
+	"github.com/docker/libcontainer/security/seccomp"
 	"github.com/docker/libcontainer/system"
 )
 
@@ -18,6 +19,9 @@ type linuxSetnsInit struct {
 
 func (l *linuxSetnsInit) Init() error {
 	if err := setupRlimits(l.config.Config); err != nil {
+		return err
+	}
+	if err := seccomp.InitSeccomp(l.config.Config.SeccompConfig); err != nil {
 		return err
 	}
 	if err := finalizeNamespace(l.config); err != nil {

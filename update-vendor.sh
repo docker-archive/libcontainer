@@ -45,5 +45,9 @@ clone git github.com/coreos/go-systemd v2
 clone git github.com/godbus/dbus v2
 clone git github.com/Sirupsen/logrus v0.6.6
 clone git github.com/syndtr/gocapability 8e4cdcb
+clone git github.com/mheon/libseccomp e84f3b382810c
+
+cd src/github.com/mheon/libseccomp/
+find ! \( -name '*.go' -or -name 'LICENSE' \) -type f -exec rm -f {} +
 
 # intentionally not vendoring Docker itself...  that'd be a circle :)
