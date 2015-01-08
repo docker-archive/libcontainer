@@ -82,6 +82,9 @@ func ExecIn(config *libcontainer.ExecConfig, userArgs []string, initPath, action
 		}
 	} else {
 		config.Cgroups.Parent = filepath.Join(container.Cgroups.Parent, container.Cgroups.Name)
+		// get devices settings from the container
+		config.Cgroups.AllowedDevices = container.Cgroups.AllowedDevices
+		config.Cgroups.AllowAllDevices = container.Cgroups.AllowAllDevices
 
 		cgroupPaths, err := setupCgroups(config.Cgroups, cmd.Process.Pid)
 		if err != nil {
