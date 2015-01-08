@@ -1,5 +1,9 @@
 package configs
 
+import (
+	"github.com/docker/libcontainer/security/seccomp"
+)
+
 type Rlimit struct {
 	Type int    `json:"type"`
 	Hard uint64 `json:"hard"`
@@ -139,8 +143,6 @@ type Config struct {
 	// sysctl -w my.property.name value in Linux.
 	SystemProperties map[string]string `json:"system_properties"`
 
-	// Seccomp allows actions to be taken whenever a syscall is made within the container.
-	// By default, all syscalls are allowed with actions to allow, trap, kill, or return an errno
-	// can be specified on a per syscall basis.
-	Seccomp *Seccomp `json:"seccomp"`
+	// SeccompConfig holds information on system calls to be restricted in the container
+	SeccompConfig seccomp.Config `json:"seccomp_config,omitempty"`
 }
