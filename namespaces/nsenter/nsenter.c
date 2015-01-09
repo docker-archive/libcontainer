@@ -100,13 +100,19 @@ void nsenter()
 	static const struct option longopts[] = {
 		{"nspid", required_argument, NULL, 'n'},
 		{"console", required_argument, NULL, 't'},
+		{"netns", required_argument, NULL, 'e'},
+		{"mntns", required_argument, NULL, 'm'},
+		{"nosetsid", 0, NULL, 's'},
 		{NULL, 0, NULL, 0}
 	};
 
 	pid_t init_pid = -1;
 	char *init_pid_str = NULL;
 	char *console = NULL;
-	while ((c = getopt_long_only(argc, argv, "n:c:", longopts, NULL)) != -1) {
+	char *netns = NULL;
+	char *mntns = NULL;
+	int nosetsid = 0;
+	while ((c = getopt_long_only(argc, argv, "n:c:e:m:s", longopts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
 			init_pid_str = optarg;
@@ -114,29 +120,26 @@ void nsenter()
 		case 't':
 			console = optarg;
 			break;
+		case 'e':
+			netns = optarg;
+			break;
+		case 'm':
+			mntns = optarg;
+			break;
+		case 's':
+			nosetsid = 1;
+			break;
 		}
-	}
-
-	if (init_pid_str == NULL) {
-		print_usage();
-		exit(1);
-	}
-
-	init_pid = strtol(init_pid_str, NULL, 10);
-	if ((init_pid == 0 && errno == EINVAL) || errno == ERANGE) {
-		fprintf(stderr,
-			"nsenter: Failed to parse PID from \"%s\" with output \"%d\" and error: \"%s\"\n",
-			init_pid_str, init_pid, strerror(errno));
-		print_usage();
-		exit(1);
 	}
 
 	argc -= 3;
 	argv += 3;
 
-	if (setsid() == -1) {
-		fprintf(stderr, "setsid failed. Error: %s\n", strerror(errno));
-		exit(1);
+	if (!nosetsid) {
+		if (setsid() == -1) {
+			fprintf(stderr, "setsid failed. Error: %s\n", strerror(errno));
+			exit(1);
+		}
 	}
 	// before we setns we need to dup the console
 	int consolefd = -1;
@@ -149,37 +152,84 @@ void nsenter()
 			exit(1);
 		}
 	}
-	// Setns on all supported namespaces.
-	char ns_dir[PATH_MAX];
-	memset(ns_dir, 0, PATH_MAX);
-	snprintf(ns_dir, PATH_MAX - 1, "/proc/%d/ns/", init_pid);
-
-	char *namespaces[] = { "ipc", "uts", "net", "pid", "mnt" };
-	const int num = sizeof(namespaces) / sizeof(char *);
-	int i;
-	for (i = 0; i < num; i++) {
-		char buf[PATH_MAX];
-		memset(buf, 0, PATH_MAX);
-		snprintf(buf, PATH_MAX - 1, "%s%s", ns_dir, namespaces[i]);
-		int fd = open(buf, O_RDONLY);
-		if (fd == -1) {
-			// Ignore nonexistent namespaces.
-			if (errno == ENOENT)
-				continue;
-
+	if (init_pid_str != NULL) {
+		init_pid = strtol(init_pid_str, NULL, 10);
+		if ((init_pid == 0 && errno == EINVAL) || errno == ERANGE) {
 			fprintf(stderr,
-				"nsenter: Failed to open ns file \"%s\" for ns \"%s\" with error: \"%s\"\n",
-				buf, namespaces[i], strerror(errno));
+				"nsenter: Failed to parse PID from \"%s\" with output \"%d\" and error: \"%s\"\n",
+				init_pid_str, init_pid, strerror(errno));
+			print_usage();
 			exit(1);
 		}
-		// Set the namespace.
-		if (setns(fd, 0) == -1) {
-			fprintf(stderr,
-				"nsenter: Failed to setns for \"%s\" with error: \"%s\"\n",
-				namespaces[i], strerror(errno));
-			exit(1);
+
+		// Setns on all supported namespaces.
+		char ns_dir[PATH_MAX];
+		memset(ns_dir, 0, PATH_MAX);
+		snprintf(ns_dir, PATH_MAX - 1, "/proc/%d/ns/", init_pid);
+
+		char *namespaces[] = { "ipc", "uts", "net", "pid", "mnt" };
+		const int num = sizeof(namespaces) / sizeof(char *);
+		int i;
+		for (i = 0; i < num; i++) {
+			char buf[PATH_MAX];
+			memset(buf, 0, PATH_MAX);
+			snprintf(buf, PATH_MAX - 1, "%s%s", ns_dir, namespaces[i]);
+			int fd = open(buf, O_RDONLY);
+			if (fd == -1) {
+				// Ignore nonexistent namespaces.
+				if (errno == ENOENT)
+					continue;
+
+				fprintf(stderr,
+					"nsenter: Failed to open ns file \"%s\" for ns \"%s\" with error: \"%s\"\n",
+					buf, namespaces[i], strerror(errno));
+				exit(1);
+			}
+			// Set the namespace.
+			if (setns(fd, 0) == -1) {
+				fprintf(stderr,
+					"nsenter: Failed to setns for \"%s\" with error: \"%s\"\n",
+					namespaces[i], strerror(errno));
+				exit(1);
+			}
+			close(fd);
 		}
-		close(fd);
+	}
+
+	if (netns != NULL) {
+			int fd = open(netns, O_RDONLY);
+			if (fd == -1) {
+				fprintf(stderr,
+					"nsenter: Failed to open ns file \"%s\" with error: \"%s\"\n",
+					netns, strerror(errno));
+				exit(1);
+			}
+			// Set the namespace.
+			if (setns(fd, CLONE_NEWNET) == -1) {
+				fprintf(stderr,
+					"nsenter: Failed to setns for \"%s\" with error: \"%s\"\n",
+					"net", strerror(errno));
+				exit(1);
+			}
+			close(fd);
+	}
+
+	if (mntns != NULL) {
+			int fd = open(mntns, O_RDONLY);
+			if (fd == -1) {
+				fprintf(stderr,
+					"nsenter: Failed to open ns file \"%s\" with error: \"%s\"\n",
+					netns, strerror(errno));
+				exit(1);
+			}
+			// Set the namespace.
+			if (setns(fd, CLONE_NEWNS) == -1) {
+				fprintf(stderr,
+					"nsenter: Failed to setns for \"%s\" with error: \"%s\"\n",
+					"mnt", strerror(errno));
+				exit(1);
+			}
+			close(fd);
 	}
 
 	// We must fork to actually enter the PID namespace.
