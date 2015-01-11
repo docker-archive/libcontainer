@@ -95,11 +95,18 @@ func Init(container *libcontainer.Config, uncleanRootfs, consolePath string, pip
 
 	label.Init()
 
-	if err := mount.InitializeMountNamespace(rootfs,
-		consolePath,
-		container.RestrictSys,
-		(*mount.MountConfig)(container.MountConfig)); err != nil {
-		return fmt.Errorf("setup mount namespace %s", err)
+	cloneFlags, err := checkNamespaceFlags(container)
+	if err != nil {
+		return fmt.Errorf("checking namespaces %s", err)
+	}
+
+	if (cloneFlags & syscall.CLONE_NEWNS) != 0 {
+		if err := mount.InitializeMountNamespace(rootfs,
+			consolePath,
+			container.RestrictSys,
+			(*mount.MountConfig)(container.MountConfig)); err != nil {
+			return fmt.Errorf("setup mount namespace %s", err)
+		}
 	}
 
 	if container.Hostname != "" {

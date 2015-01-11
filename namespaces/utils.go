@@ -3,6 +3,7 @@
 package namespaces
 
 import (
+	"errors"
 	"os"
 	"syscall"
 
@@ -35,11 +36,37 @@ func newInitPipe() (parent *os.File, child *os.File, err error) {
 	return os.NewFile(uintptr(fds[1]), "parent"), os.NewFile(uintptr(fds[0]), "child"), nil
 }
 
-// GetNamespaceFlags parses the container's Namespaces options to set the correct
+// getNamespaceFlags parses the container's Namespaces options to set the correct
 // flags on clone, unshare, and setns
-func GetNamespaceFlags(namespaces libcontainer.Namespaces) (flag int) {
+func getNamespaceFlags(namespaces libcontainer.Namespaces, onlyNew bool) (flag int) {
 	for _, v := range namespaces {
+		if onlyNew && v.Path != "" {
+			continue
+		}
 		flag |= namespaceInfo[v.Type]
 	}
 	return flag
+}
+
+// Check NamespaceFlags with proper namespace.
+func checkNamespaceFlags(container *libcontainer.Config) (int, error) {
+	cloneFlags := getNamespaceFlags(container.Namespaces, true)
+
+	if ((cloneFlags & syscall.CLONE_NEWNET) == 0) &&
+		(len(container.Networks) != 0 || len(container.Routes) != 0) {
+		return cloneFlags, errors.New("unable to apply network parameters without network namespace")
+	}
+	if (cloneFlags & syscall.CLONE_NEWNS) == 0 {
+		if container.MountConfig != nil {
+			return cloneFlags, errors.New("mount_config is set without mount namespace")
+		}
+		if container.RestrictSys {
+			return cloneFlags, errors.New("unable to restrict access to sysctl without mount namespace")
+		}
+	}
+	if (cloneFlags & syscall.CLONE_NEWUTS) == 0 {
+		return cloneFlags, errors.New("unable to set the hostname without UTS namespace")
+	}
+
+	return cloneFlags, nil
 }
