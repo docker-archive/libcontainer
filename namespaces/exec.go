@@ -182,7 +182,7 @@ func DefaultCreateCommand(container *libcontainer.Config, console, dataPath, ini
 	if command.SysProcAttr == nil {
 		command.SysProcAttr = &syscall.SysProcAttr{}
 	}
-	command.SysProcAttr.Cloneflags = uintptr(GetNamespaceFlags(container.Namespaces))
+	command.SysProcAttr.Cloneflags = uintptr(getNamespaceFlags(container.Namespaces, true))
 
 	command.SysProcAttr.Pdeathsig = syscall.SIGKILL
 	command.ExtraFiles = []*os.File{pipe}
