@@ -2,9 +2,11 @@ package user
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -197,23 +199,36 @@ type ExecUser struct {
 	Home     string
 }
 
-// GetExecUserPath is a wrapper for GetExecUser. It reads data from each of the
+// GetExecUserPath is a wrapper for GetExecUser.
+// It initially attempts to get data using getent (from glibc-common).
+// If that fails then it reads data from each of the
 // given file paths and uses that data as the arguments to GetExecUser. If the
 // files cannot be opened for any reason, the error is ignored and a nil
 // io.Reader is passed instead.
 func GetExecUserPath(userSpec string, defaults *ExecUser, passwdPath, groupPath string) (*ExecUser, error) {
-	passwd, err := os.Open(passwdPath)
+
+	cmd := exec.Command("getent", "passwd")
+	stdout, err := cmd.Output()
+	passwd := bytes.NewReader(stdout)
 	if err != nil {
-		passwd = nil
-	} else {
-		defer passwd.Close()
+		passwd, err := os.Open(passwdPath)
+		if err != nil {
+			passwd = nil
+		} else {
+			defer passwd.Close()
+		}
 	}
 
-	group, err := os.Open(groupPath)
+	cmd = exec.Command("getent", "group")
+	stdout, err = cmd.Output()
+	group := bytes.NewReader(stdout)
 	if err != nil {
-		group = nil
-	} else {
-		defer group.Close()
+		group, err := os.Open(groupPath)
+		if err != nil {
+			group = nil
+		} else {
+			defer group.Close()
+		}
 	}
 
 	return GetExecUser(userSpec, defaults, passwd, group)
