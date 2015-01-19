@@ -151,7 +151,7 @@ func EnterCgroups(state *libcontainer.State, pid int) error {
 	return cgroups.EnterPid(state.CgroupPaths, pid)
 }
 
-// cleanup remaining tasks in the cgroup and then remove the cgroups
+// cleanupCgroups stops remaining tasks in the cgroup and then remove the cgroups
 func cleanupCgroups(c *cgroups.Cgroup, paths map[string]string) error {
 	if c != nil {
 		if systemd.UseSystemd() {

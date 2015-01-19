@@ -2,7 +2,6 @@ package fs
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -93,22 +92,18 @@ func Apply(c *cgroups.Cgroup, pid int) (map[string]string, error) {
 
 // Stop stops all processes in the current cgroup
 func Stop(c *cgroups.Cgroup) error {
-	d, err := getCgroupData(c, 0)
-	if err != nil {
-		return err
-	}
-
 	// first we send SIGTERM to all tasks inside the cgroup
 	if err := Kill(c, syscall.SIGTERM); err != nil {
 		return err
 	}
 
-	// if failed to stop with only SIGTERM, we send SIGKILL
-	if err := waitStop(d, 100*time.Millisecond, 5*time.Second); err != nil {
+	// if failed to stop with only SIGTERM after 5.11s, we send SIGKILL
+	if err := waitStop(c, 10*time.Millisecond, 9); err != nil {
 		if err := Kill(c, syscall.SIGKILL); err != nil {
 			return err
 		}
-		return waitStop(d, 100*time.Millisecond, -1*time.Second)
+		// if failed to stop after 10s, timedout error is returned
+		return waitStop(c, 10*time.Millisecond, 10)
 	}
 	return nil
 }
@@ -136,46 +131,25 @@ func Kill(c *cgroups.Cgroup, signal syscall.Signal) error {
 	return nil
 }
 
-// waitStop waits for all tasks in the given cgroup tasks to stop. If they
-// failed to stop after a given timeout, then this returns an error.
-//
-// if timeout is negative then we will wait forever for the tasks to be stopped
-func waitStop(d *data, interval time.Duration, timeout time.Duration) error {
-	freezerPath, err := d.path("freezer")
-	if err != nil {
-		return err
-	}
-	tasksPath := filepath.Join(freezerPath, CgroupProcesses)
-	f, err := os.Open(tasksPath)
-	if err != nil {
-		return fmt.Errorf("failed to open %q : %s", tasksPath, err)
-	}
-	defer f.Close()
-
-	done := make(chan struct{}, 1)
-	go func() {
-		for {
-			var pid int
-			_, err = fmt.Fscan(f, &pid)
-			if err == nil || err == io.EOF {
-				done <- struct{}{}
-				return
-			}
-			time.Sleep(interval)
+// waitStop waits for all tasks in the given cgroup tasks to stop. It will check
+// a given number of times with increasing delay between tries. If the tasks
+// failed to stop then approriate error will be returned
+func waitStop(c *cgroups.Cgroup, initialWait time.Duration, tries int) error {
+	for i := 0; i < tries; i++ {
+		if i != 0 {
+			time.Sleep(initialWait)
+			initialWait *= 2
 		}
-	}()
-
-	if timeout < 0 {
-		<-done
-		return nil
+		pids, err := GetPids(c)
+		if err != nil {
+			return err
+		}
+		// all tasks in the current cgroup have been removed
+		if len(pids) == 0 {
+			return nil
+		}
 	}
-
-	select {
-	case <-done:
-		return nil
-	case <-time.After(timeout):
-		return fmt.Errorf("timedout stopping freezer.tasks %q", tasksPath)
-	}
+	return fmt.Errorf("failed to stop %q: timed out", c.Name)
 }
 
 // Symmetrical public function to update device based cgroups.  Also available
