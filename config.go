@@ -113,9 +113,13 @@ type Config struct {
 	// commonly used by selinux
 	ProcessLabel string `json:"process_label,omitempty"`
 
-	// RestrictSys will remount /proc/sys, /sys, and mask over sysrq-trigger as well as /proc/irq and
-	// /proc/bus
+	// RestrictSys will remount and mask entries defined in RestrictedSysEntries.
+	// If this is true and RestrictedSysEntries is empty, the default RestrictedSysEntries will be used.
 	RestrictSys bool `json:"restrict_sys,omitempty"`
+
+	// RestrictedSysEntries can be used to remount and mask entries from /proc
+	// It'll remount and mask proc/sys, proc/sysrq-trigger, proc/irq and proc/bus if left empty.
+	RestrictedSysEntries []string `json:"restricted_sys_entries,omitempty"`
 
 	// Rlimits specifies the resource limits, such as max open files, to set in the container
 	// If Rlimits are not set, the container will inherit rlimits from the parent process
