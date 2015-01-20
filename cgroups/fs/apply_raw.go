@@ -119,6 +119,10 @@ func Kill(c *cgroups.Cgroup, signal syscall.Signal) error {
 
 	pids, err := GetPids(c)
 	if err != nil {
+		// if the cgroup does not exist, then it's stopped
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 
@@ -142,6 +146,10 @@ func waitStop(c *cgroups.Cgroup, initialWait time.Duration, tries int) error {
 		}
 		pids, err := GetPids(c)
 		if err != nil {
+			// if the cgroup does not exist, then it's stopped
+			if os.IsNotExist(err) {
+				return nil
+			}
 			return err
 		}
 		// all tasks in the current cgroup have been removed
