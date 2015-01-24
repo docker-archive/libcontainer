@@ -8,16 +8,16 @@ import (
 
 	"github.com/docker/docker/pkg/symlink"
 	"github.com/docker/libcontainer/label"
+	"github.com/docker/libcontainer/mount/mode"
 )
 
 type Mount struct {
-	Type        string `json:"type,omitempty"`
-	Source      string `json:"source,omitempty"`      // Source path, in the host namespace
-	Destination string `json:"destination,omitempty"` // Destination path, in the container
-	Writable    bool   `json:"writable,omitempty"`
-	Relabel     string `json:"relabel,omitempty"` // Relabel source if set, "z" indicates shared, "Z" indicates unshared
-	Private     bool   `json:"private,omitempty"`
-	Slave       bool   `json:"slave,omitempty"`
+	Type        string    `json:"type,omitempty"`
+	Source      string    `json:"source,omitempty"`      // Source path, in the host namespace
+	Destination string    `json:"destination,omitempty"` // Destination path, in the container
+	Mode        mode.Mode `json:"mode,omitempty"`
+	Private     bool      `json:"private,omitempty"`
+	Slave       bool      `json:"slave,omitempty"`
 }
 
 func (m *Mount) Mount(rootfs, mountLabel string) error {
@@ -37,7 +37,7 @@ func (m *Mount) bindMount(rootfs, mountLabel string) error {
 		dest  = filepath.Join(rootfs, m.Destination)
 	)
 
-	if !m.Writable {
+	if !m.Mode.Writable() {
 		flags = flags | syscall.MS_RDONLY
 	}
 
@@ -64,16 +64,14 @@ func (m *Mount) bindMount(rootfs, mountLabel string) error {
 		return fmt.Errorf("mounting %s into %s %s", m.Source, dest, err)
 	}
 
-	if !m.Writable {
+	if !m.Mode.Writable() {
 		if err := syscall.Mount(m.Source, dest, "bind", uintptr(flags|syscall.MS_REMOUNT), ""); err != nil {
 			return fmt.Errorf("remounting %s into %s %s", m.Source, dest, err)
 		}
 	}
 
-	if m.Relabel != "" {
-		if err := label.Relabel(m.Source, mountLabel, m.Relabel); err != nil {
-			return fmt.Errorf("relabeling %s to %s %s", m.Source, mountLabel, err)
-		}
+	if err := label.Relabel(m.Source, mountLabel, m.Mode); err != nil {
+		return fmt.Errorf("relabeling %s to %s %s", m.Source, mountLabel, err)
 	}
 
 	if m.Private {

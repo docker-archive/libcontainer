@@ -2,6 +2,10 @@
 
 package label
 
+import (
+	"github.com/docker/libcontainer/mount/mode"
+)
+
 // InitLabels returns the process label and file labels to be used within
 // the container.  A list of options can be passed into this function to alter
 // the labels.
@@ -29,7 +33,7 @@ func SetFileCreateLabel(fileLabel string) error {
 	return nil
 }
 
-func Relabel(path string, fileLabel string, relabel string) error {
+func Relabel(path string, fileLabel string, m mode.Mode) error {
 	return nil
 }
 
