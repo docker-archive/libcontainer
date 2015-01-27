@@ -41,6 +41,10 @@ func newProp(name string, units interface{}) systemd.Property {
 }
 
 func UseSystemd() bool {
+	if disableSystemd := os.Getenv("DISABLE_SYSTEMD_CGROUPS"); disableSystemd != "" {
+		return false
+
+	}
 	s, err := os.Stat("/run/systemd/system")
 	if err != nil || !s.IsDir() {
 		return false
