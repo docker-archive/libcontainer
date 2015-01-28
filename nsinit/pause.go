@@ -39,7 +39,7 @@ func toggle(state cgroups.FreezerState) error {
 		return err
 	}
 
-	if systemd.UseSystemd() {
+	if container.Cgroups.Driver == "systemd" {
 		err = systemd.Freeze(container.Cgroups, state)
 	} else {
 		err = fs.Freeze(container.Cgroups, state)
