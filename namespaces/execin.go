@@ -15,6 +15,8 @@ import (
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/apparmor"
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/cgroups/fs"
+	"github.com/docker/libcontainer/cgroups/systemd"
 	"github.com/docker/libcontainer/label"
 	"github.com/docker/libcontainer/mount"
 	"github.com/docker/libcontainer/system"
@@ -23,8 +25,10 @@ import (
 
 // ExecIn reexec's the initPath with the argv 0 rewrite to "nsenter" so that it is able to run the
 // setns code in a single threaded environment joining the existing containers' namespaces.
-func ExecIn(container *libcontainer.Config, state *libcontainer.State, userArgs []string, initPath, action string,
+func ExecIn(config *libcontainer.ExecConfig, userArgs []string, initPath, action string,
 	stdin io.Reader, stdout, stderr io.Writer, console string, startCallback func(*exec.Cmd)) (int, error) {
+	state := config.State
+	container := config.Container
 
 	args := []string{fmt.Sprintf("nsenter-%s", action), "--nspid", strconv.Itoa(state.InitPid)}
 
@@ -70,9 +74,25 @@ func ExecIn(container *libcontainer.Config, state *libcontainer.State, userArgs 
 		return -1, terr
 	}
 
-	// Enter cgroups.
-	if err := EnterCgroups(state, cmd.Process.Pid); err != nil {
-		return terminate(err)
+	if config.Cgroups == nil {
+		// Enter existing cgroups of the container
+		// In this case, we cant keep track of individual execin session to
+		// clean up orphan processes, so just try to remove the main process
+		// when it fail
+		if err := EnterCgroups(state, cmd.Process.Pid); err != nil {
+			return terminate(err)
+		}
+	} else {
+		config.Cgroups.Parent = filepath.Join(container.Cgroups.Parent, container.Cgroups.Name)
+		// get devices settings from the container
+		config.Cgroups.AllowedDevices = container.Cgroups.AllowedDevices
+		config.Cgroups.AllowAllDevices = container.Cgroups.AllowAllDevices
+
+		cgroupPaths, err := setupCgroups(config.Cgroups, cmd.Process.Pid)
+		if err != nil {
+			return terminate(err)
+		}
+		defer cleanupCgroups(config.Cgroups, cgroupPaths)
 	}
 
 	// finish cgroups' setup, unblock the child process.
@@ -198,4 +218,20 @@ func SetupContainer(container *libcontainer.Config, dataPath, uncleanRootfs, con
 
 func EnterCgroups(state *libcontainer.State, pid int) error {
 	return cgroups.EnterPid(state.CgroupPaths, pid)
+}
+
+// cleanupCgroups stops remaining tasks in the cgroup and then remove the cgroups
+func cleanupCgroups(c *cgroups.Cgroup, paths map[string]string) error {
+	if c != nil {
+		if systemd.UseSystemd() {
+			if err := systemd.Stop(c); err != nil {
+				return err
+			}
+		} else {
+			if err := fs.Stop(c); err != nil {
+				return err
+			}
+		}
+	}
+	return cgroups.RemovePaths(paths)
 }

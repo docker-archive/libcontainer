@@ -325,12 +325,15 @@ func DefaultSetupCommand(container *libcontainer.Config, console, dataPath, init
 // SetupCgroups applies the cgroup restrictions to the process running in the container based
 // on the container's configuration
 func SetupCgroups(container *libcontainer.Config, nspid int) (map[string]string, error) {
-	if container.Cgroups != nil {
-		c := container.Cgroups
+	return setupCgroups(container.Cgroups, nspid)
+}
+
+func setupCgroups(c *cgroups.Cgroup, pid int) (map[string]string, error) {
+	if c != nil {
 		if systemd.UseSystemd() {
-			return systemd.Apply(c, nspid)
+			return systemd.Apply(c, pid)
 		}
-		return fs.Apply(c, nspid)
+		return fs.Apply(c, pid)
 	}
 	return map[string]string{}, nil
 }
