@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/symlink"
 	"github.com/docker/libcontainer/label"
 )
@@ -87,9 +88,10 @@ func (m *Mount) bindMount(rootfs, mountLabel string) error {
 
 func (m *Mount) tmpfsMount(rootfs, mountLabel string) error {
 	var (
-		err  error
-		l    = label.FormatMountLabel("", mountLabel)
-		dest = filepath.Join(rootfs, m.Destination)
+		err         error
+		l           = label.FormatMountLabel("", mountLabel)
+		dest        = filepath.Join(rootfs, m.Destination)
+		backup_dest = filepath.Join(rootfs, ".tmpfs"+m.Destination[1:])
 	)
 
 	// FIXME: (crosbymichael) This does not belong here and should be done a layer above
@@ -100,10 +102,16 @@ func (m *Mount) tmpfsMount(rootfs, mountLabel string) error {
 	if err := createIfNotExists(dest, true); err != nil {
 		return fmt.Errorf("creating new tmpfs mount target %s", err)
 	}
+	if err := archive.CopyWithTar(dest, backup_dest); err != nil {
+		return err
+	}
 
 	if err := syscall.Mount("tmpfs", dest, "tmpfs", uintptr(defaultMountFlags), l); err != nil {
 		return fmt.Errorf("%s mounting %s in tmpfs", err, dest)
 	}
 
-	return nil
+	if err := archive.CopyWithTar(backup_dest, dest); err != nil {
+		return err
+	}
+	return os.RemoveAll(backup_dest)
 }
