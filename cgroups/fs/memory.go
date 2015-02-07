@@ -88,6 +88,13 @@ func (s *MemoryGroup) GetStats(path string, stats *cgroups.Stats) error {
 		return fmt.Errorf("failed to parse memory.max_usage_in_bytes - %v", err)
 	}
 	stats.MemoryStats.MaxUsage = value
+
+	value, err = getCgroupParamUint(path, "memory.limit_in_bytes")
+	if err != nil {
+		return fmt.Errorf("failed to parse memory.limit_in_bytes - %v", err)
+	}
+	stats.MemoryStats.MemoryLimit = value
+
 	value, err = getCgroupParamUint(path, "memory.failcnt")
 	if err != nil {
 		return fmt.Errorf("failed to parse memory.failcnt - %v", err)
