@@ -35,6 +35,8 @@ type MemoryStats struct {
 	Usage uint64 `json:"usage,omitempty"`
 	// maximum usage ever recorded.
 	MaxUsage uint64 `json:"max_usage,omitempty"`
+	// current memory limit
+	MemoryLimit uint64 `json:"memory_limit,omitempty"`
 	// TODO(vishh): Export these as stronger types.
 	// all the stats exported via memory.stat.
 	Stats map[string]uint64 `json:"stats,omitempty"`

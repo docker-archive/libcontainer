@@ -79,6 +79,10 @@ func expectMemoryStatEquals(t *testing.T, expected, actual cgroups.MemoryStats) 
 		log.Printf("Expected memory max usage %d but found %d\n", expected.MaxUsage, actual.MaxUsage)
 		t.Fail()
 	}
+	if expected.MemoryLimit != actual.MemoryLimit {
+		log.Printf("Expected memory limit %d but found %d\n", expected.MemoryLimit, actual.MemoryLimit)
+		t.Fail()
+	}
 	for key, expValue := range expected.Stats {
 		actValue, ok := actual.Stats[key]
 		if !ok {

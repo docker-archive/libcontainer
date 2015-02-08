@@ -11,6 +11,7 @@ const (
 rss 1024`
 	memoryUsageContents    = "2048\n"
 	memoryMaxUsageContents = "4096\n"
+	memoryLimit            = "52428800\n"
 	memoryFailcnt          = "100\n"
 )
 
@@ -21,6 +22,7 @@ func TestMemoryStats(t *testing.T) {
 		"memory.stat":               memoryStatContents,
 		"memory.usage_in_bytes":     memoryUsageContents,
 		"memory.max_usage_in_bytes": memoryMaxUsageContents,
+		"memory.limit_in_bytes":     memoryLimit,
 		"memory.failcnt":            memoryFailcnt,
 	})
 
@@ -30,7 +32,13 @@ func TestMemoryStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedStats := cgroups.MemoryStats{Usage: 2048, MaxUsage: 4096, Failcnt: 100, Stats: map[string]uint64{"cache": 512, "rss": 1024}}
+	expectedStats := cgroups.MemoryStats{
+		Usage:       2048,
+		MaxUsage:    4096,
+		MemoryLimit: 52428800,
+		Failcnt:     100,
+		Stats:       map[string]uint64{"cache": 512, "rss": 1024},
+	}
 	expectMemoryStatEquals(t, expectedStats, actualStats.MemoryStats)
 }
 
