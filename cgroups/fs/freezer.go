@@ -10,7 +10,7 @@ import (
 type FreezerGroup struct {
 }
 
-func (s *FreezerGroup) Set(d *data) error {
+func (s *FreezerGroup) Apply(d *data) error {
 	switch d.c.Freezer {
 	case cgroups.Frozen, cgroups.Thawed:
 		dir, err := d.path("freezer")

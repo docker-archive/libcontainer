@@ -58,7 +58,7 @@ type subsystem interface {
 	// Removes the cgroup represented by 'data'.
 	Remove(*data) error
 	// Creates and joins the cgroup represented by data.
-	Set(*data) error
+	Apply(*data) error
 }
 
 type data struct {
@@ -81,7 +81,7 @@ func Apply(c *cgroups.Cgroup, pid int) (map[string]string, error) {
 		}
 	}()
 	for name, sys := range subsystems {
-		if err := sys.Set(d); err != nil {
+		if err := sys.Apply(d); err != nil {
 			return nil, err
 		}
 		// FIXME: Apply should, ideally, be reentrant or be broken up into a separate
@@ -109,7 +109,7 @@ func ApplyDevices(c *cgroups.Cgroup, pid int) error {
 
 	devices := subsystems["devices"]
 
-	return devices.Set(d)
+	return devices.Apply(d)
 }
 
 func GetStats(systemPaths map[string]string) (*cgroups.Stats, error) {
@@ -139,7 +139,7 @@ func Freeze(c *cgroups.Cgroup, state cgroups.FreezerState) error {
 	c.Freezer = state
 
 	freezer := subsystems["freezer"]
-	err = freezer.Set(d)
+	err = freezer.Apply(d)
 	if err != nil {
 		c.Freezer = prevState
 		return err

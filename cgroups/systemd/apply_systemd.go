@@ -336,5 +336,5 @@ func joinCpuset(c *cgroups.Cgroup, pid int) error {
 
 	s := &fs.CpusetGroup{}
 
-	return s.SetDir(path, c.CpusetCpus, c.CpusetMems, pid)
+	return s.ApplyDir(path, c.CpusetCpus, c.CpusetMems, pid)
 }
