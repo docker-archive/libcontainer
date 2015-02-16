@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/libcontainer/mount/mode"
 	"github.com/docker/libcontainer/selinux"
 )
 
@@ -100,11 +101,14 @@ func SetFileCreateLabel(fileLabel string) error {
 // containers to share the content.  If the relabel string is a "Z" then
 // the MCS label should continue to be used.  SELinux will use this field
 // to make sure the content can not be shared by other containes.
-func Relabel(path string, fileLabel string, relabel string) error {
+func Relabel(path string, fileLabel string, m mode.Mode) error {
 	if fileLabel == "" {
 		return nil
 	}
-	if relabel == "z" {
+	if !m.Relabel() {
+		return nil
+	}
+	if m.Shared() {
 		c := selinux.NewContext(fileLabel)
 		c["level"] = "s0"
 		fileLabel = c.Get()
