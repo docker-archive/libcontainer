@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	dataPath  = os.Getenv("data_path")
-	console   = os.Getenv("console")
-	rawPipeFd = os.Getenv("pipe")
+	dataPath        = os.Getenv("data_path")
+	console         = os.Getenv("console")
+	rawPipeFd       = os.Getenv("pipe")
+	libcontainerDir = os.Getenv("LIBCONTAINER_DIR")
 
 	initCommand = cli.Command{
 		Name:   "init",

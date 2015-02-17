@@ -48,7 +48,7 @@ func main() {
 	app := cli.NewApp()
 
 	app.Name = "nsinit"
-	app.Version = "0.1"
+	app.Version = "0.2"
 	app.Author = "libcontainer maintainers"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{Name: "nspid"},
@@ -65,6 +65,8 @@ func main() {
 		pauseCommand,
 		statsCommand,
 		unpauseCommand,
+		checkpointCommand,
+		restoreCommand,
 	}
 
 	if err := app.Run(os.Args); err != nil {
