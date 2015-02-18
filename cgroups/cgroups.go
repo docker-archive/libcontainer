@@ -54,4 +54,5 @@ type Cgroup struct {
 	BlkioWeight       int64             `json:"blkio_weight,omitempty"`       // Specifies per cgroup weight, range is from 10 to 1000.
 	Freezer           FreezerState      `json:"freezer,omitempty"`            // set the freeze value for the process
 	Slice             string            `json:"slice,omitempty"`              // Parent slice to use for systemd
+	Driver            string            `json:"driver,omitempty"`             // Configure the driver that should manage the container's cgroups (default: cgroupfs, systemd)
 }

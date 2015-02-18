@@ -156,7 +156,7 @@ func killAllPids(container *libcontainer.Config) error {
 		freeze  = fs.Freeze
 		getPids = fs.GetPids
 	)
-	if systemd.UseSystemd() {
+	if container.Cgroups.Driver == "systemd" {
 		freeze = systemd.Freeze
 		getPids = systemd.GetPids
 	}
@@ -325,7 +325,7 @@ func DefaultSetupCommand(container *libcontainer.Config, console, dataPath, init
 func SetupCgroups(container *libcontainer.Config, nspid int) (map[string]string, error) {
 	if container.Cgroups != nil {
 		c := container.Cgroups
-		if systemd.UseSystemd() {
+		if container.Cgroups.Driver == "systemd" {
 			return systemd.Apply(c, nspid)
 		}
 		return fs.Apply(c, nspid)
