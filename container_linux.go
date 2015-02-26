@@ -5,6 +5,7 @@ package libcontainer
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -125,7 +126,17 @@ func (c *linuxContainer) commandTemplate(p *Process, childPipe *os.File) (*exec.
 		Path: c.initPath,
 		Args: c.initArgs,
 	}
-	cmd.Stdin = p.Stdin
+	if p.Stdin != nil {
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			io.Copy(stdin, p.Stdin)
+			stdin.Close()
+		}()
+	}
+
 	cmd.Stdout = p.Stdout
 	cmd.Stderr = p.Stderr
 	cmd.Dir = c.config.Rootfs
