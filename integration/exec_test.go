@@ -56,6 +56,49 @@ func testExecPS(t *testing.T, userns bool) {
 	}
 }
 
+func TestExecEnvironment(t *testing.T) {
+	if testing.Short() {
+		return
+	}
+	rootfs, err := newRootfs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remove(rootfs)
+
+	config := newTemplateConfig(rootfs)
+	container, err := newContainer(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer container.Destroy()
+
+	buffers := newStdBuffers()
+	process := &libcontainer.Process{
+		Args: []string{"env"},
+		Env: []string{
+			"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			"TERM=dummy",
+			"TERM=xterm",
+		},
+		Stdin:  buffers.Stdin,
+		Stdout: buffers.Stdout,
+		Stderr: buffers.Stderr,
+	}
+
+	if err := container.Start(process); err != nil {
+		t.Fatal(err)
+	}
+	waitProcess(process, t)
+
+	out := buffers.Stdout.String()
+	if !strings.Contains(out, "TERM=xterm") ||
+		!strings.Contains(out, "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin") ||
+		strings.Contains(out, "TERM=dummy") {
+		t.Fatalf("unexpected environment, output %q", out)
+	}
+}
+
 func TestIPCPrivate(t *testing.T) {
 	if testing.Short() {
 		return
