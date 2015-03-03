@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/codegangsta/cli"
@@ -49,9 +51,17 @@ func execAction(context *cli.Context) {
 			fatal(err)
 		}
 	}
+	envs := make(map[string]string)
+	for _, env := range context.StringSlice("env") {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) < 2 {
+			fatal(fmt.Errorf("Invalid env: %s", env))
+		}
+		envs[parts[0]] = parts[1]
+	}
 	process := &libcontainer.Process{
 		Args:   context.Args(),
-		Env:    context.StringSlice("env"),
+		Env:    envs,
 		User:   context.String("user"),
 		Cwd:    context.String("cwd"),
 		Stdin:  os.Stdin,

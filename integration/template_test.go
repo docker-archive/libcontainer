@@ -6,11 +6,11 @@ import (
 	"github.com/docker/libcontainer/configs"
 )
 
-var standardEnvironment = []string{
-	"HOME=/root",
-	"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-	"HOSTNAME=integration",
-	"TERM=xterm",
+var standardEnvironment = map[string]string{
+	"HOME":     "/root",
+	"PATH":     "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+	"HOSTNAME": "integration",
+	"TERM":     "xterm",
 }
 
 const defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV

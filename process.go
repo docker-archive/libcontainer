@@ -18,7 +18,7 @@ type Process struct {
 	Args []string
 
 	// Env specifies the environment variables for the process.
-	Env []string
+	Env map[string]string
 
 	// User will set the uid and gid of the executing process running inside the container
 	// local to the contaienr's user and group configuration.
