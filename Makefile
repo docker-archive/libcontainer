@@ -1,3 +1,6 @@
+CGO_LDFLAGS ?= -l:libct.a -lnl-route-3 -lnl-3 -l:libapparmor.a -l:libselinux.a -l:libdbus-1.a -lm
+LIBRARY_PATH ?= $(shell pwd)/vendor/src/github.com/avagin/libct
+export CGO_LDFLAGS LIBRARY_PATH
 
 all:
 	docker build -t dockercore/libcontainer .
