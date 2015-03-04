@@ -29,5 +29,9 @@ func (l *linuxSetnsInit) Init() error {
 			return err
 		}
 	}
-	return system.Execv(l.config.Args[0], l.config.Args[0:], l.config.Env)
+	var envs []string
+	for k, v := range l.config.Env {
+		envs = append(envs, k+"="+v)
+	}
+	return system.Execv(l.config.Args[0], l.config.Args[0:], envs)
 }

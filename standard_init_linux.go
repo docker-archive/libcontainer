@@ -89,5 +89,9 @@ func (l *linuxStandardInit) Init() error {
 	if syscall.Getppid() == 1 {
 		return syscall.Kill(syscall.Getpid(), syscall.SIGKILL)
 	}
-	return system.Execv(l.config.Args[0], l.config.Args[0:], l.config.Env)
+	var envs []string
+	for k, v := range l.config.Env {
+		envs = append(envs, k+"="+v)
+	}
+	return system.Execv(l.config.Args[0], l.config.Args[0:], envs)
 }

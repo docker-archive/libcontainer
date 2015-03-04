@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"syscall"
 
 	log "github.com/Sirupsen/logrus"
@@ -40,13 +39,13 @@ type network struct {
 
 // initConfig is used for transferring parameters from Exec() to Init()
 type initConfig struct {
-	Args     []string        `json:"args"`
-	Env      []string        `json:"env"`
-	Cwd      string          `json:"cwd"`
-	User     string          `json:"user"`
-	Config   *configs.Config `json:"config"`
-	Console  string          `json:"console"`
-	Networks []*network      `json:"network"`
+	Args     []string          `json:"args"`
+	Env      map[string]string `json:"env"`
+	Cwd      string            `json:"cwd"`
+	User     string            `json:"user"`
+	Config   *configs.Config   `json:"config"`
+	Console  string            `json:"console"`
+	Networks []*network        `json:"network"`
 }
 
 type initer interface {
@@ -72,21 +71,6 @@ func newContainerInit(t initType, pipe *os.File) (initer, error) {
 		}, nil
 	}
 	return nil, fmt.Errorf("unknown init type %q", t)
-}
-
-// populateProcessEnvironment loads the provided environment variables into the
-// current processes's environment.
-func populateProcessEnvironment(env []string) error {
-	for _, pair := range env {
-		p := strings.SplitN(pair, "=", 2)
-		if len(p) < 2 {
-			return fmt.Errorf("invalid environment '%v'", pair)
-		}
-		if err := os.Setenv(p[0], p[1]); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // finalizeNamespace drops the caps, sets the correct user
@@ -123,6 +107,17 @@ func finalizeNamespace(config *initConfig) error {
 	}
 	if config.Cwd != "" {
 		if err := syscall.Chdir(config.Cwd); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// populateProcessEnvironment loads the provided environment variables into the
+// current processes's environment.
+func populateProcessEnvironment(env map[string]string) error {
+	for k, v := range env {
+		if err := os.Setenv(k, v); err != nil {
 			return err
 		}
 	}
