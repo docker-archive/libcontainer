@@ -1,0 +1,16 @@
+*.o
+*.d
+*.bin
+*.elf
+*.out
+*.swp
+*.swo
+.git-ignore
+*.so
+*.a
+cscope*
+tags
+TAGS
+patches
+src/include/version.h
+src/include/config.h

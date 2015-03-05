@@ -1,0 +1,20 @@
+language: c
+
+compiler: gcc
+
+before_install:
+    - sudo apt-get update -qq
+
+install:
+    - sudo apt-get install make gcc autoconf autoconf-doc libtool bison flex libselinux1-dev libapparmor-dev libdbus-1-dev
+
+script:
+    - git submodule update --init --recursive
+    - ( cd .shipped/libnl && ./autogen.sh && ./configure && make -j2 && sudo make install && cd ../../ )
+    - make -j2
+    - make -j2 test-build
+
+notifications:
+  email:
+    on_success: change
+    on_failure: always

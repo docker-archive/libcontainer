@@ -1,0 +1,7 @@
+#include <tunables/global>
+
+profile libct-test flags=(attach_disconnected,mediate_deleted) {
+	#include <abstractions/base>
+
+	deny /proc/self/stat r,
+}
