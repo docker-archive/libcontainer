@@ -6,7 +6,10 @@ Creates a mock of the cgroup filesystem for the duration of the test.
 package fs
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/docker/libcontainer/cgroups"
@@ -54,8 +57,36 @@ func NewCgroupTestUtil(subsystem string, t *testing.T) *cgroupTestUtil {
 	return &cgroupTestUtil{CgroupData: d, CgroupPath: testCgroupPath, t: t}
 }
 
+// FIXME: This returns cgroupTestUtil with faked cgroup path, right now is
+// used by stats tests only, need to figure out a better way to test stats
+// and get rid of this function.
+func tempCgroupTestUtil(subsystem string, t *testing.T) *cgroupTestUtil {
+	d := &data{
+		c: &configs.Cgroup{},
+	}
+	tempDir, err := ioutil.TempDir("", subsystem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.root = tempDir
+	testCgroupPath := filepath.Join(d.root, fmt.Sprintf("%s_cgroup_test", subsystem))
+
+	err = os.MkdirAll(testCgroupPath, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &cgroupTestUtil{CgroupData: d, CgroupPath: testCgroupPath, t: t}
+}
+
 func (c *cgroupTestUtil) cleanup() {
 	os.RemoveAll(c.CgroupPath)
+}
+
+// FIXME: Need to be removed as well as tempCgroupTestUtil when we figure
+// out a better way.
+func (c *cgroupTestUtil) tempCleanup() {
+	os.RemoveAll(c.CgroupData.root)
 }
 
 // Write the specified contents on the mock of the specified cgroup files,

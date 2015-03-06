@@ -74,8 +74,8 @@ func appendBlkioStatEntry(blkioStatEntries *[]cgroups.BlkioStatEntry, major, min
 }
 
 func TestBlkioSetWeight(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 
 	const (
 		weightBefore = 100
@@ -103,8 +103,8 @@ func TestBlkioSetWeight(t *testing.T) {
 }
 
 func TestBlkioStats(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": serviceBytesRecursiveContents,
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -169,8 +169,8 @@ func TestBlkioStats(t *testing.T) {
 }
 
 func TestBlkioStatsNoSectorsFile(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": serviceBytesRecursiveContents,
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -190,8 +190,8 @@ func TestBlkioStatsNoSectorsFile(t *testing.T) {
 }
 
 func TestBlkioStatsNoServiceBytesFile(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_serviced_recursive":     servicedRecursiveContents,
 		"blkio.io_queued_recursive":       queuedRecursiveContents,
@@ -211,8 +211,8 @@ func TestBlkioStatsNoServiceBytesFile(t *testing.T) {
 }
 
 func TestBlkioStatsNoServicedFile(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": serviceBytesRecursiveContents,
 		"blkio.io_queued_recursive":        queuedRecursiveContents,
@@ -232,8 +232,8 @@ func TestBlkioStatsNoServicedFile(t *testing.T) {
 }
 
 func TestBlkioStatsNoQueuedFile(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": serviceBytesRecursiveContents,
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -256,8 +256,8 @@ func TestBlkioStatsNoServiceTimeFile(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": serviceBytesRecursiveContents,
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -280,8 +280,8 @@ func TestBlkioStatsNoWaitTimeFile(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": serviceBytesRecursiveContents,
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -304,8 +304,8 @@ func TestBlkioStatsNoMergedFile(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": serviceBytesRecursiveContents,
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -328,8 +328,8 @@ func TestBlkioStatsNoTimeFile(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": serviceBytesRecursiveContents,
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -349,8 +349,8 @@ func TestBlkioStatsNoTimeFile(t *testing.T) {
 }
 
 func TestBlkioStatsUnexpectedNumberOfFields(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": "8:0 Read 100 100",
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -371,8 +371,8 @@ func TestBlkioStatsUnexpectedNumberOfFields(t *testing.T) {
 }
 
 func TestBlkioStatsUnexpectedFieldType(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": "8:0 Read Write",
 		"blkio.io_serviced_recursive":      servicedRecursiveContents,
@@ -393,8 +393,8 @@ func TestBlkioStatsUnexpectedFieldType(t *testing.T) {
 }
 
 func TestNonCFQBlkioStats(t *testing.T) {
-	helper := NewCgroupTestUtil("blkio", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("blkio", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"blkio.io_service_bytes_recursive": "",
 		"blkio.io_serviced_recursive":      "",
