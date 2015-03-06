@@ -6,11 +6,10 @@ Creates a mock of the cgroup filesystem for the duration of the test.
 package fs
 
 import (
-	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
+	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
 )
 
@@ -21,24 +20,30 @@ type cgroupTestUtil struct {
 	// Path to the mock cgroup directory.
 	CgroupPath string
 
-	// Temporary directory to store mock cgroup filesystem.
-	tempDir string
-	t       *testing.T
+	t *testing.T
 }
 
 // Creates a new test util for the specified subsystem
 func NewCgroupTestUtil(subsystem string, t *testing.T) *cgroupTestUtil {
 	d := &data{
-		c: &configs.Cgroup{},
+		c:      &configs.Cgroup{},
+		cgroup: "/cgroup_test",
 	}
-	tempDir, err := ioutil.TempDir("", fmt.Sprintf("%s_cgroup_test", subsystem))
+
+	root, err := getCgroupRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
-	d.root = tempDir
+
+	d.root = root
 	testCgroupPath, err := d.path(subsystem)
 	if err != nil {
-		t.Fatal(err)
+		if cgroups.IsNotFound(err) && testCgroupPath == "" {
+			// IsNotFound err and empty path means subsystem not mounted
+			t.Skipf("%s cgroup not mounted, skipping test.", subsystem)
+		} else if !cgroups.IsNotFound(err) {
+			t.Fatal(err)
+		}
 	}
 
 	// Ensure the full mock cgroup path exists.
@@ -46,14 +51,15 @@ func NewCgroupTestUtil(subsystem string, t *testing.T) *cgroupTestUtil {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &cgroupTestUtil{CgroupData: d, CgroupPath: testCgroupPath, tempDir: tempDir, t: t}
+	return &cgroupTestUtil{CgroupData: d, CgroupPath: testCgroupPath, t: t}
 }
 
 func (c *cgroupTestUtil) cleanup() {
-	os.RemoveAll(c.tempDir)
+	os.RemoveAll(c.CgroupPath)
 }
 
-// Write the specified contents on the mock of the specified cgroup files.
+// Write the specified contents on the mock of the specified cgroup files,
+// caller should ensure these files are exist.
 func (c *cgroupTestUtil) writeFileContents(fileContents map[string]string) {
 	for file, contents := range fileContents {
 		err := writeFile(c.CgroupPath, file, contents)

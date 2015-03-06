@@ -243,7 +243,7 @@ func (raw *data) path(subsystem string) (string, error) {
 
 		if _, err := os.Stat(path); err != nil {
 			if os.IsNotExist(err) {
-				return "", cgroups.NewNotFoundError(subsystem)
+				return path, cgroups.NewNotFoundError(subsystem)
 			}
 
 			return "", err

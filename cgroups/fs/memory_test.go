@@ -33,6 +33,7 @@ func TestMemorySetMemory(t *testing.T) {
 
 	helper.CgroupData.c.Memory = memoryAfter
 	helper.CgroupData.c.MemoryReservation = reservationAfter
+	helper.CgroupData.c.MemorySwap = -1
 	memory := &MemoryGroup{}
 	if err := memory.Set(helper.CgroupPath, helper.CgroupData.c); err != nil {
 		t.Fatal(err)

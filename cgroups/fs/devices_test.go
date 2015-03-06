@@ -25,7 +25,7 @@ func TestDevicesSetAllow(t *testing.T) {
 	defer helper.cleanup()
 
 	helper.writeFileContents(map[string]string{
-		"device.deny": "a",
+		"devices.deny": "a",
 	})
 
 	helper.CgroupData.c.AllowAllDevices = false
@@ -35,9 +35,7 @@ func TestDevicesSetAllow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// FIXME: this doesn't make sence, the file devices.allow under real cgroupfs
-	// is not allowed to read. Our test path don't have cgroupfs mounted.
-	value, err := getCgroupParamString(helper.CgroupPath, "devices.allow")
+	value, err := getCgroupParamString(helper.CgroupPath, "devices.list")
 	if err != nil {
 		t.Fatalf("Failed to parse devices.allow - %s", err)
 	}
