@@ -29,7 +29,10 @@ func loadConfig(context *cli.Context) (*configs.Config, error) {
 }
 
 func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
-	return libcontainer.New(context.GlobalString("root"), libcontainer.Cgroupfs)
+	return libcontainer.New(context.GlobalString("root"), libcontainer.Cgroupfs, func(l *libcontainer.LinuxFactory) error {
+		l.CriuPath = context.GlobalString("criu")
+		return nil
+	})
 }
 
 func getContainer(context *cli.Context) (libcontainer.Container, error) {
