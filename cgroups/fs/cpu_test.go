@@ -78,8 +78,8 @@ func TestCpuSetBandWidth(t *testing.T) {
 }
 
 func TestCpuStats(t *testing.T) {
-	helper := NewCgroupTestUtil("cpu", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("cpu", t)
+	defer helper.tempCleanup()
 
 	const (
 		kNrPeriods     = 2000
@@ -109,8 +109,8 @@ func TestCpuStats(t *testing.T) {
 }
 
 func TestNoCpuStatFile(t *testing.T) {
-	helper := NewCgroupTestUtil("cpu", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("cpu", t)
+	defer helper.tempCleanup()
 
 	cpu := &CpuGroup{}
 	actualStats := *cgroups.NewStats()
@@ -121,8 +121,8 @@ func TestNoCpuStatFile(t *testing.T) {
 }
 
 func TestInvalidCpuStat(t *testing.T) {
-	helper := NewCgroupTestUtil("cpu", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("cpu", t)
+	defer helper.tempCleanup()
 	cpuStatContent := `nr_periods 2000
 	nr_throttled 200
 	throttled_time fortytwo`

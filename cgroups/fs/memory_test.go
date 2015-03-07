@@ -33,6 +33,7 @@ func TestMemorySetMemory(t *testing.T) {
 
 	helper.CgroupData.c.Memory = memoryAfter
 	helper.CgroupData.c.MemoryReservation = reservationAfter
+	helper.CgroupData.c.MemorySwap = -1
 	memory := &MemoryGroup{}
 	if err := memory.Set(helper.CgroupPath, helper.CgroupData.c); err != nil {
 		t.Fatal(err)
@@ -56,8 +57,8 @@ func TestMemorySetMemory(t *testing.T) {
 }
 
 func TestMemoryStats(t *testing.T) {
-	helper := NewCgroupTestUtil("memory", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("memory", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"memory.stat":               memoryStatContents,
 		"memory.usage_in_bytes":     memoryUsageContents,
@@ -76,8 +77,8 @@ func TestMemoryStats(t *testing.T) {
 }
 
 func TestMemoryStatsNoStatFile(t *testing.T) {
-	helper := NewCgroupTestUtil("memory", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("memory", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"memory.usage_in_bytes":     memoryUsageContents,
 		"memory.max_usage_in_bytes": memoryMaxUsageContents,
@@ -92,8 +93,8 @@ func TestMemoryStatsNoStatFile(t *testing.T) {
 }
 
 func TestMemoryStatsNoUsageFile(t *testing.T) {
-	helper := NewCgroupTestUtil("memory", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("memory", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"memory.stat":               memoryStatContents,
 		"memory.max_usage_in_bytes": memoryMaxUsageContents,
@@ -108,8 +109,8 @@ func TestMemoryStatsNoUsageFile(t *testing.T) {
 }
 
 func TestMemoryStatsNoMaxUsageFile(t *testing.T) {
-	helper := NewCgroupTestUtil("memory", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("memory", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"memory.stat":           memoryStatContents,
 		"memory.usage_in_bytes": memoryUsageContents,
@@ -124,8 +125,8 @@ func TestMemoryStatsNoMaxUsageFile(t *testing.T) {
 }
 
 func TestMemoryStatsBadStatFile(t *testing.T) {
-	helper := NewCgroupTestUtil("memory", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("memory", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"memory.stat":               "rss rss",
 		"memory.usage_in_bytes":     memoryUsageContents,
@@ -141,8 +142,8 @@ func TestMemoryStatsBadStatFile(t *testing.T) {
 }
 
 func TestMemoryStatsBadUsageFile(t *testing.T) {
-	helper := NewCgroupTestUtil("memory", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("memory", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"memory.stat":               memoryStatContents,
 		"memory.usage_in_bytes":     "bad",
@@ -158,8 +159,8 @@ func TestMemoryStatsBadUsageFile(t *testing.T) {
 }
 
 func TestMemoryStatsBadMaxUsageFile(t *testing.T) {
-	helper := NewCgroupTestUtil("memory", t)
-	defer helper.cleanup()
+	helper := tempCgroupTestUtil("memory", t)
+	defer helper.tempCleanup()
 	helper.writeFileContents(map[string]string{
 		"memory.stat":               memoryStatContents,
 		"memory.usage_in_bytes":     memoryUsageContents,
