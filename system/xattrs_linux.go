@@ -72,7 +72,9 @@ func Lgetxattr(path string, attr string) ([]byte, error) {
 	case errno != 0:
 		return nil, errno
 	}
-	sz = int(_sz)
+
+	// Drop the C \0 byte
+	sz = int(_sz) - 1
 	return dest[:sz], nil
 }
 
