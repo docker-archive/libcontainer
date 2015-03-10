@@ -1,2 +1,2 @@
 all:
-	go build -o nsinit .
+	go build $(BUILD_TAGS) -o nsinit .

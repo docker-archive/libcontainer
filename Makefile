@@ -15,19 +15,19 @@ sh:
 GO_PACKAGES = $(shell find . -not \( -wholename ./vendor -prune -o -wholename ./.git -prune \) -name '*.go' -print0 | xargs -0n1 dirname | sort -u)
 
 direct-test:
-	go test $(TEST_TAGS) -cover -v $(GO_PACKAGES)
+	go test $(TEST_TAGS) $(BUILD_TAGS) -cover -v $(GO_PACKAGES)
 
 direct-test-short:
-	go test $(TEST_TAGS) -cover -test.short -v $(GO_PACKAGES)
+	go test $(TEST_TAGS) $(BUILD_TAGS) -cover -test.short -v $(GO_PACKAGES)
 
 direct-build:
-	go build -v $(GO_PACKAGES)
+	go build $(BUILD_TAGS) -v $(GO_PACKAGES)
 
 direct-install:
-	go install -v $(GO_PACKAGES)
+	go install -v $(BUILD_TAGS) $(GO_PACKAGES)
 
 local:
-	go test -v
+	go test $(BUILD_TAGS) -v
 
 validate:
 	hack/validate.sh

@@ -37,6 +37,7 @@ RUN cp sample_configs/minimal.json /busybox/container.json
 
 ENV LIBRARY_PATH /go/src/github.com/docker/libcontainer/vendor/src/github.com/avagin/libct/
 ENV CGO_LDFLAGS -l:libct.a -l:libnl-route-3.a -l:libnl-3.a -l:libapparmor.a -l:libselinux.a -l:libdbus-1.a -lm
+ENV BUILD_TAGS --tags libct
 RUN go get -d -v ./...
 RUN make direct-install
 

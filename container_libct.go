@@ -1,4 +1,4 @@
-// +build linux
+// +build libct
 
 package libcontainer
 
@@ -17,9 +17,6 @@ import (
 	"github.com/docker/libcontainer/system"
 	"github.com/docker/libcontainer/utils"
 )
-
-// this is to enforce that the libctContainer conforms to the Container interface at compile time
-var _ Container = (*libctContainer)(nil)
 
 // libctContainer represents a container that can be executed on linux based host machines
 type libctContainer struct {

@@ -1,3 +1,5 @@
+// +build libct
+
 package libcontainer
 
 import (
@@ -17,6 +19,19 @@ type libctFactory struct {
 	session *libct.Session
 	root    string
 	systemd bool
+}
+
+func NewLibctFactory(root string, systemd bool) (Factory, error) {
+	f := libctFactory{
+		root:    root,
+		systemd: systemd,
+	}
+
+	if err := f.init(); err != nil {
+		return nil, err
+	}
+
+	return &f, nil
 }
 
 func (f *libctFactory) init() error {
