@@ -15,6 +15,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{Name: "root", Value: "/var/run/nsinit", Usage: "root directory for containers"},
 		cli.StringFlag{Name: "log-file", Value: "", Usage: "set the log file to output logs to"},
+		cli.StringFlag{Name: "factory", Value: "linux", Usage: "factory for creating containers"},
 		cli.BoolFlag{Name: "debug", Usage: "enable debug output in the logs"},
 	}
 	app.Commands = []cli.Command{
