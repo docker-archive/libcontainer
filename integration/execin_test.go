@@ -108,6 +108,9 @@ func TestExecInError(t *testing.T) {
 	if testing.Short() {
 		return
 	}
+	if libct {
+		t.Skip()
+	}
 	rootfs, err := newRootfs()
 	ok(t, err)
 	defer remove(rootfs)
