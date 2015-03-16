@@ -60,10 +60,10 @@ func DeviceFromPath(path, permissions string) (*configs.Device, error) {
 }
 
 func HostDevices() ([]*configs.Device, error) {
-	return getDevices("/dev")
+	return GetDevices("/dev", "rwm")
 }
 
-func getDevices(path string) ([]*configs.Device, error) {
+func getDevices(path, permissions string) ([]*configs.Device, error) {
 	files, err := ioutilReadDir(path)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func getDevices(path string) ([]*configs.Device, error) {
 			case "pts", "shm", "fd", "mqueue":
 				continue
 			default:
-				sub, err := getDevices(filepath.Join(path, f.Name()))
+				sub, err := GetDevices(filepath.Join(path, f.Name()), permissions)
 				if err != nil {
 					return nil, err
 				}
@@ -87,7 +87,7 @@ func getDevices(path string) ([]*configs.Device, error) {
 		case f.Name() == "console":
 			continue
 		}
-		device, err := DeviceFromPath(filepath.Join(path, f.Name()), "rwm")
+		device, err := DeviceFromPath(filepath.Join(path, f.Name()), permissions)
 		if err != nil {
 			if err == ErrNotADevice {
 				continue
