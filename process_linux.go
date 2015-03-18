@@ -45,7 +45,7 @@ func (p *setnsProcess) startTime() (string, error) {
 }
 
 func (p *setnsProcess) signal(s os.Signal) error {
-	return p.cmd.Process.Signal(s)
+	return maybeSyscall(p.cmd.Process, s)
 }
 
 func (p *setnsProcess) start() (err error) {
@@ -236,5 +236,14 @@ func (p *initProcess) createNetworkInterfaces() error {
 }
 
 func (p *initProcess) signal(s os.Signal) error {
-	return p.cmd.Process.Signal(s)
+	return maybeSyscall(p.cmd.Process, s)
+}
+
+func maybeSyscall(process *os.Process, s os.Signal) error {
+	if sys, ok := s.(syscall.Signal); ok {
+		// Prefer syscall.Kill because os.Process.Signal masks ESRCH
+		return syscall.Kill(process.Pid, sys)
+	} else {
+		return process.Signal(s)
+	}
 }
