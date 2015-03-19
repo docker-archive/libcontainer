@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/docker/libcontainer/cgroups"
@@ -153,6 +155,12 @@ func (p *initProcess) start() error {
 	if err != nil {
 		return newSystemError(err)
 	}
+	// Save the standard descriptor names before the container process
+	// can potentially move them (e.g., via dup2()).  If we don't do this now,
+	// we won't know at checkpoint time which file descriptor to look up.
+	if err = p.saveStdPipes(); err != nil {
+		return newSystemError(err)
+	}
 	// Do this before syncing with child so that no children
 	// can escape the cgroup
 	if err := p.manager.Apply(p.pid()); err != nil {
@@ -237,4 +245,20 @@ func (p *initProcess) createNetworkInterfaces() error {
 
 func (p *initProcess) signal(s os.Signal) error {
 	return p.cmd.Process.Signal(s)
+}
+
+// Save process's std{in,out,err} file names as these will be
+// removed if/when the container is checkpointed.  We will need
+// this info to restore the container.
+func (p *initProcess) saveStdPipes() error {
+	dirPath := filepath.Join("/proc", strconv.Itoa(p.pid()), "/fd")
+	for i := 0; i < 3; i++ {
+		f := filepath.Join(dirPath, strconv.Itoa(i))
+		target, err := os.Readlink(f)
+		if err != nil {
+			return err
+		}
+		p.config.Config.StdFds[i] = target
+	}
+	return nil
 }
