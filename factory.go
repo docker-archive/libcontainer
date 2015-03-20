@@ -44,4 +44,9 @@ type Factory interface {
 
 	// Type returns info string about factory type (e.g. lxc, libcontainer...)
 	Type() string
+
+	// Destroy just brutally removes factory root.
+	// errors:
+	// Root is not empty
+	Destroy() error
 }
