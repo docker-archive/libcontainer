@@ -44,4 +44,7 @@ type Factory interface {
 
 	// Type returns info string about factory type (e.g. lxc, libcontainer...)
 	Type() string
+
+	// Cleanup releases all resources used by the factory
+	Cleanup() error
 }
