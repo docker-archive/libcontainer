@@ -97,6 +97,17 @@ func TestFactoryNewTmpfs(t *testing.T) {
 	if !found {
 		t.Fatalf("Factory Root is not listed in mounts list")
 	}
+
+	if err := lfactory.Cleanup(); err != nil {
+		t.Fatal(err)
+	}
+	mounted, err = mount.Mounted(lfactory.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mounted {
+		t.Fatalf("expected factory root to be unmounted after cleanup")
+	}
 }
 
 func TestFactoryLoadNotExists(t *testing.T) {
