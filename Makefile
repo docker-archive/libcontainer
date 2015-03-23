@@ -34,3 +34,11 @@ validate:
 
 binary: all
 	docker run --rm --privileged -v $(CURDIR)/bundles:/go/bin dockercore/libcontainer make direct-install
+
+.FORCE:
+
+integration: .FORCE
+	make -C integration
+
+nsinit: .FORCE
+	make -C nsinit
