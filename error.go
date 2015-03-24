@@ -10,6 +10,7 @@ const (
 	// Factory errors
 	IdInUse ErrorCode = iota
 	InvalidIdFormat
+	RootIsNotEmpty
 
 	// Container errors
 	ContainerNotExists
@@ -31,6 +32,8 @@ func (c ErrorCode) String() string {
 		return "Id already in use"
 	case InvalidIdFormat:
 		return "Invalid format"
+	case RootIsNotEmpty:
+		return "Factory root is not empty"
 	case ContainerPaused:
 		return "Container paused"
 	case ConfigInvalid:

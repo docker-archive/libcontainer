@@ -192,6 +192,18 @@ func (l *LinuxFactory) Type() string {
 	return "libcontainer"
 }
 
+func (l *LinuxFactory) Destroy() error {
+	ls, err := ioutil.ReadDir(l.Root)
+	if err != nil {
+		return newGenericError(err, SystemError)
+	}
+	if len(ls) != 0 {
+		return newGenericError(fmt.Errorf("%s is not empty", l.Root), RootIsNotEmpty)
+	}
+	syscall.Unmount(l.Root, syscall.MNT_DETACH)
+	return os.Remove(l.Root)
+}
+
 // StartInitialization loads a container by opening the pipe fd from the parent to read the configuration and state
 // This is a low level implementation detail of the reexec and should not be consumed externally
 func (l *LinuxFactory) StartInitialization(pipefd uintptr) (err error) {

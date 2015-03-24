@@ -45,6 +45,51 @@ func TestFactoryNew(t *testing.T) {
 	if factory.Type() != "libcontainer" {
 		t.Fatalf("unexpected factory type: %q, expected %q", factory.Type(), "libcontainer")
 	}
+
+	if err := factory.Destroy(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(lfactory.Root); err == nil {
+		t.Fatalf("%s still exists, but shouldn't", lfactory.Root)
+	}
+}
+
+func TestDestroyNonEmpty(t *testing.T) {
+	root, rerr := newTestRoot()
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	defer os.RemoveAll(root)
+	if err := ioutil.WriteFile(filepath.Join(root, "cont"), nil, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	factory, err := New(root, Cgroupfs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if factory == nil {
+		t.Fatal("factory should not be nil")
+	}
+	lfactory, ok := factory.(*LinuxFactory)
+	if !ok {
+		t.Fatal("expected linux factory returned on linux based systems")
+	}
+	err = factory.Destroy()
+	if err == nil {
+		t.Fatal("Factory should throw error on destroying non-empty root")
+	}
+	lerr, ok := err.(Error)
+	if !ok {
+		t.Fatalf("Error %v has unexpected type", err)
+	}
+	if lerr.Code() != RootIsNotEmpty {
+		t.Fatalf("Unexpected error code: %s", lerr.Code())
+	}
+	if _, err := os.Stat(lfactory.Root); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestFactoryNewTmpfs(t *testing.T) {
