@@ -318,6 +318,8 @@ func (c *linuxContainer) Restore(process *Process) error {
 		"restore", "-v4",
 		"-D", filepath.Join(c.root, "checkpoint"),
 		"-o", "restore.log",
+		"--restore-detached",
+		"--restore-sibling",
 		"--root", c.config.Rootfs,
 		"--pidfile", pidfile,
 		"--manage-cgroups", "--evasive-devices",
@@ -364,7 +366,7 @@ func (c *linuxContainer) Restore(process *Process) error {
 	if !st.Success() {
 		return fmt.Errorf("criu failed: %s", st.String())
 	}
-	r, err := newRestoredProcess(pidfile, cmd)
+	r, err := newRestoredProcess(pidfile)
 	if err != nil {
 		return err
 	}
