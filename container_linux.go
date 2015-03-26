@@ -5,6 +5,7 @@ package libcontainer
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -307,6 +308,31 @@ func (c *linuxContainer) Restore(process *Process) error {
 	if err := os.Remove(pidfile); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+
+	act_r, act_w, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	defer act_r.Close()
+	defer act_w.Close()
+
+	// StdFds have to be initialized while CRIU is working. An action-script
+	// is used to stop CRIU. This is a dirty hack.
+	// In a future we are going to use "criu swrk" for this, it will be
+	// avaliable in CRIU 1.6
+	actionscript := filepath.Join(c.root, "action-script")
+	f, err := os.OpenFile(actionscript, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0700)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(f, "#!/bin/sh\n")
+	fmt.Fprintf(f, "[ \"setup-namespaces\" != \"$CRTOOLS_SCRIPT_ACTION\" ] && exit 0\n")
+	fmt.Fprintf(f, "sleep 1000 & pid=$!\n")
+	fmt.Fprintf(f, "echo $pid > /proc/%d/fd/%d\n", os.Getpid(), act_w.Fd())
+	fmt.Fprintf(f, "wait $pid && exit 1\n")
+	fmt.Fprintf(f, "exit 0\n")
+	f.Close()
+
 	// XXX We should do the restore in detached mode (-d).
 	//     To do this, we need an "init" process that executes
 	//     CRIU and waits for it, reaping its children, and
@@ -320,6 +346,7 @@ func (c *linuxContainer) Restore(process *Process) error {
 		"--root", c.config.Rootfs,
 		"--pidfile", pidfile,
 		"--manage-cgroups", "--evasive-devices",
+		"--action-script", actionscript,
 	}
 	for _, m := range c.config.Mounts {
 		if m.Device == "bind" {
@@ -353,12 +380,42 @@ func (c *linuxContainer) Restore(process *Process) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+	sync := make(chan error)
+	go func() {
+		var err error
+		defer func() {
+			if err != nil {
+				log.Warn(err)
+			}
+			sync <- err
+			close(sync)
+		}()
+		pid := math.MinInt32
+		_, err = fmt.Fscanf(act_r, "%d", &pid)
+		if err != nil {
+			return
+		}
+		p, err := os.FindProcess(pid)
+		if err != nil {
+			return
+		}
+
+		err = saveStdPipes(cmd.Process.Pid, c.config)
+		if err != nil {
+			return
+		}
+		p.Kill()
+	}()
 
 	// cmd.Wait() waits cmd.goroutines which are used for proxying file descriptors.
 	// Here we want to wait only the CRIU process.
 	st, err := cmd.Process.Wait()
 	if err != nil {
 		return err
+	}
+	err = <-sync
+	if err != nil {
+		log.Warn(err)
 	}
 	if !st.Success() {
 		return fmt.Errorf("criu failed: %s", st.String())
