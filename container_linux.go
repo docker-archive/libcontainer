@@ -312,11 +312,12 @@ func (c *linuxContainer) Restore(process *Process) error {
 	// is used to stop CRIU. This is a dirty hack.
 	// In a future we are going to use "criu swrk" for this, it will be
 	// avaliable in CRIU 1.6
-	actionscript := filepath.Join(c.root, "action-script")
+	actionscript := filepath.Join(c.root, "checkpoint", "action-script")
 	f, err := os.OpenFile(actionscript, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0700)
 	if err != nil {
 		return err
 	}
+	defer os.Remove(actionscript)
 	fmt.Fprintf(f, "#!/bin/sh\n")
 	fmt.Fprintf(f, "[ \"setup-namespaces\" != \"$CRTOOLS_SCRIPT_ACTION\" ] && exit 0\n")
 	fmt.Fprintf(f, "sleep 1000 & pid=$!\n")
