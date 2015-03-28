@@ -27,7 +27,7 @@ type linuxContainer struct {
 	initPath      string
 	initArgs      []string
 	initProcess   parentProcess
-	criuPath      string		// criu v1.4 or newer
+	criuPath      string // criu v1.4 or newer
 	m             sync.Mutex
 }
 
