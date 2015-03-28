@@ -98,7 +98,7 @@ type Config struct {
 	ReadonlyPaths []string `json:"readonly_paths"`
 
 	// Container's standard descriptors (std{in,out,err}), needed for checkpoint and restore
-	StdFds [3]string `json:"ext_pipes,omitempty"`
+	StdFds [3]string `json:"std_fds,omitempty"`
 }
 
 // Gets the root uid for the process on host which could be non-zero
