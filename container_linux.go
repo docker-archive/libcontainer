@@ -27,7 +27,7 @@ type linuxContainer struct {
 	initPath      string
 	initArgs      []string
 	initProcess   parentProcess
-	criuPath      string
+	criuPath      string		// criu v1.4 or newer
 	m             sync.Mutex
 }
 
@@ -258,19 +258,12 @@ func (c *linuxContainer) NotifyOOM() (<-chan struct{}, error) {
 	return notifyOnOOM(c.cgroupManager.GetPaths())
 }
 
-// XXX debug support, remove when debugging done.
-func addArgsFromEnv(evar string, args *[]string) {
-	if e := os.Getenv(evar); e != "" {
-		for _, f := range strings.Fields(e) {
-			*args = append(*args, f)
-		}
-	}
-	fmt.Printf(">>> criu %v\n", *args)
-}
-
 func (c *linuxContainer) Checkpoint() error {
 	c.m.Lock()
 	defer c.m.Unlock()
+	// XXX The pathname to CRIU's image directory should
+	//     be passed in and ideally point to somewhere
+	//     outside the container's root.
 	dir := filepath.Join(c.root, "checkpoint")
 	// Since a container can be C/R'ed multiple times,
 	// the checkpoint directory may already exist.
@@ -291,7 +284,6 @@ func (c *linuxContainer) Checkpoint() error {
 				"--ext-mount-map", fmt.Sprintf("%s:%s", m.Destination, m.Destination))
 		}
 	}
-	addArgsFromEnv("CRIU_C", &args) // XXX debug
 	if err := exec.Command(c.criuPath, args...).Run(); err != nil {
 		return err
 	}
@@ -333,10 +325,6 @@ func (c *linuxContainer) Restore(process *Process) error {
 	fmt.Fprintf(f, "exit 0\n")
 	f.Close()
 
-	// XXX We should do the restore in detached mode (-d).
-	//     To do this, we need an "init" process that executes
-	//     CRIU and waits for it, reaping its children, and
-	//     waiting for the container.
 	args := []string{
 		"restore", "-v4",
 		"-D", filepath.Join(c.root, "checkpoint"),
@@ -361,18 +349,7 @@ func (c *linuxContainer) Restore(process *Process) error {
 			args = append(args, "--inherit-fd", fmt.Sprintf("fd[%d]:%s", i, s))
 		}
 	}
-	addArgsFromEnv("CRIU_R", &args) // XXX debug
 
-	// XXX This doesn't really belong here as our caller should have
-	//     already set up root (including devices) and mounted it.
-	/*
-		// remount root for restore
-		if err := syscall.Mount(c.config.Rootfs, c.config.Rootfs, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-			return err
-		}
-
-		defer syscall.Unmount(c.config.Rootfs, syscall.MNT_DETACH)
-	*/
 	cmd := exec.Command(c.criuPath, args...)
 	cmd.Stdin = process.Stdin
 	cmd.Stdout = process.Stdout
