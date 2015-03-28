@@ -5,6 +5,7 @@ package libcontainer
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,7 @@ type linuxContainer struct {
 	initPath      string
 	initArgs      []string
 	initProcess   parentProcess
-	criuPath      string
+	criuPath      string // criu v1.4 or newer
 	m             sync.Mutex
 }
 
@@ -257,19 +258,12 @@ func (c *linuxContainer) NotifyOOM() (<-chan struct{}, error) {
 	return notifyOnOOM(c.cgroupManager.GetPaths())
 }
 
-// XXX debug support, remove when debugging done.
-func addArgsFromEnv(evar string, args *[]string) {
-	if e := os.Getenv(evar); e != "" {
-		for _, f := range strings.Fields(e) {
-			*args = append(*args, f)
-		}
-	}
-	fmt.Printf(">>> criu %v\n", *args)
-}
-
 func (c *linuxContainer) Checkpoint() error {
 	c.m.Lock()
 	defer c.m.Unlock()
+	// XXX The pathname to CRIU's image directory should
+	//     be passed in and ideally point to somewhere
+	//     outside the container's root.
 	dir := filepath.Join(c.root, "checkpoint")
 	// Since a container can be C/R'ed multiple times,
 	// the checkpoint directory may already exist.
@@ -290,7 +284,6 @@ func (c *linuxContainer) Checkpoint() error {
 				"--ext-mount-map", fmt.Sprintf("%s:%s", m.Destination, m.Destination))
 		}
 	}
-	addArgsFromEnv("CRIU_C", &args) // XXX debug
 	if err := exec.Command(c.criuPath, args...).Run(); err != nil {
 		return err
 	}
@@ -307,17 +300,42 @@ func (c *linuxContainer) Restore(process *Process) error {
 	if err := os.Remove(pidfile); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	// XXX We should do the restore in detached mode (-d).
-	//     To do this, we need an "init" process that executes
-	//     CRIU and waits for it, reaping its children, and
-	//     waiting for the container.
+
+	act_r, act_w, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	defer act_r.Close()
+	defer act_w.Close()
+
+	// StdFds have to be initialized while CRIU is working. An action-script
+	// is used to stop CRIU. This is a dirty hack.
+	// In a future we are going to use "criu swrk" for this, it will be
+	// avaliable in CRIU 1.6
+	actionscript := filepath.Join(c.root, "checkpoint", "action-script")
+	f, err := os.OpenFile(actionscript, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0700)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(actionscript)
+	fmt.Fprintf(f, "#!/bin/sh\n")
+	fmt.Fprintf(f, "[ \"setup-namespaces\" != \"$CRTOOLS_SCRIPT_ACTION\" ] && exit 0\n")
+	fmt.Fprintf(f, "sleep 1000 & pid=$!\n")
+	fmt.Fprintf(f, "echo $pid > /proc/%d/fd/%d\n", os.Getpid(), act_w.Fd())
+	fmt.Fprintf(f, "wait $pid && exit 1\n")
+	fmt.Fprintf(f, "exit 0\n")
+	f.Close()
+
 	args := []string{
 		"restore", "-v4",
 		"-D", filepath.Join(c.root, "checkpoint"),
 		"-o", "restore.log",
+		"--restore-detached",
+		"--restore-sibling",
 		"--root", c.config.Rootfs,
 		"--pidfile", pidfile,
 		"--manage-cgroups", "--evasive-devices",
+		"--action-script", actionscript,
 	}
 	for _, m := range c.config.Mounts {
 		if m.Device == "bind" {
@@ -332,18 +350,7 @@ func (c *linuxContainer) Restore(process *Process) error {
 			args = append(args, "--inherit-fd", fmt.Sprintf("fd[%d]:%s", i, s))
 		}
 	}
-	addArgsFromEnv("CRIU_R", &args) // XXX debug
 
-	// XXX This doesn't really belong here as our caller should have
-	//     already set up root (including devices) and mounted it.
-	/*
-		// remount root for restore
-		if err := syscall.Mount(c.config.Rootfs, c.config.Rootfs, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-			return err
-		}
-
-		defer syscall.Unmount(c.config.Rootfs, syscall.MNT_DETACH)
-	*/
 	cmd := exec.Command(c.criuPath, args...)
 	cmd.Stdin = process.Stdin
 	cmd.Stdout = process.Stdout
@@ -351,6 +358,32 @@ func (c *linuxContainer) Restore(process *Process) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+	sync := make(chan error)
+	go func() {
+		var err error
+		defer func() {
+			if err != nil {
+				log.Warn(err)
+			}
+			sync <- err
+			close(sync)
+		}()
+		pid := math.MinInt32
+		_, err = fmt.Fscanf(act_r, "%d", &pid)
+		if err != nil {
+			return
+		}
+		p, err := os.FindProcess(pid)
+		if err != nil {
+			return
+		}
+
+		err = saveStdPipes(cmd.Process.Pid, c.config)
+		if err != nil {
+			return
+		}
+		p.Kill()
+	}()
 
 	// cmd.Wait() waits cmd.goroutines which are used for proxying file descriptors.
 	// Here we want to wait only the CRIU process.
@@ -358,10 +391,14 @@ func (c *linuxContainer) Restore(process *Process) error {
 	if err != nil {
 		return err
 	}
+	err = <-sync
+	if err != nil {
+		log.Warn(err)
+	}
 	if !st.Success() {
 		return fmt.Errorf("criu failed: %s", st.String())
 	}
-	r, err := newRestoredProcess(pidfile, cmd)
+	r, err := newRestoredProcess(pidfile)
 	if err != nil {
 		return err
 	}
