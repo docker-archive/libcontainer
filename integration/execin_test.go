@@ -108,9 +108,6 @@ func TestExecInError(t *testing.T) {
 	if testing.Short() {
 		return
 	}
-	if libct {
-		t.Skip()
-	}
 	rootfs, err := newRootfs()
 	ok(t, err)
 	defer remove(rootfs)
@@ -145,7 +142,7 @@ func TestExecInError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Should be an error")
 	}
-	if !strings.Contains(err.Error(), "executable file not found") {
+	if factory.Type() == "libcontainer" && !strings.Contains(err.Error(), "executable file not found") {
 		t.Fatalf("Should be error about not found executable, got %s", err)
 	}
 }
