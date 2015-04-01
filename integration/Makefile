@@ -1,2 +1,2 @@
 all:
-	go test -v $(BUILD_TAGS) .
+	go test -bench . -v $(BUILD_TAGS) .

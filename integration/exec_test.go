@@ -182,13 +182,93 @@ func newTestRoot() (string, error) {
 	return dir, nil
 }
 
-
 func waitProcess(p *libcontainer.Process, t testing.TB) {
 	status, err := p.Wait()
 	ok(t, err)
 	if !status.Success() {
 		t.Fatal(status)
 	}
+}
+
+func BenchmarkStart(t *testing.B) {
+	if testing.Short() {
+		return
+	}
+	root, err := newTestRoot()
+	ok(t, err)
+	defer os.RemoveAll(root)
+
+	rootfs, err := newRootfs()
+	ok(t, err)
+	defer remove(rootfs)
+
+	config := newTemplateConfig(rootfs)
+
+	container, err := factory.Create("test", config)
+	ok(t, err)
+	defer container.Destroy()
+
+	t.ResetTimer()
+	for i := 0; i < t.N; i++ {
+		pconfig := libcontainer.Process{
+			Args: []string{"true"},
+			Env:  standardEnvironment,
+		}
+		err = container.Start(&pconfig)
+		ok(t, err)
+
+		waitProcess(&pconfig, t)
+	}
+}
+
+func BenchmarkEnter(t *testing.B) {
+	if testing.Short() {
+		return
+	}
+	root, err := newTestRoot()
+	ok(t, err)
+	defer os.RemoveAll(root)
+
+	rootfs, err := newRootfs()
+	ok(t, err)
+	defer remove(rootfs)
+
+	config := newTemplateConfig(rootfs)
+
+	container, err := factory.Create("test", config)
+	ok(t, err)
+	defer container.Destroy()
+
+	// Execute a first process in the container
+	stdinR, stdinW, err := os.Pipe()
+	ok(t, err)
+
+	pconfig := libcontainer.Process{
+		Args:  []string{"cat"},
+		Env:   standardEnvironment,
+		Stdin: stdinR,
+	}
+	err = container.Start(&pconfig)
+	stdinR.Close()
+	defer stdinW.Close()
+	ok(t, err)
+
+	t.ResetTimer()
+	for i := 0; i < t.N; i++ {
+
+		pconfig2 := libcontainer.Process{
+			Env: standardEnvironment,
+		}
+		pconfig2.Args = []string{"true"}
+
+		err = container.Start(&pconfig2)
+		ok(t, err)
+
+		waitProcess(&pconfig2, t)
+	}
+
+	stdinW.Close()
+	waitProcess(&pconfig, t)
 }
 
 func TestEnter(t *testing.T) {
