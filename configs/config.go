@@ -102,7 +102,7 @@ type Config struct {
 	ReadonlyPaths []string `json:"readonly_paths"`
 
 	// SeccompConfig holds information on system calls to be restricted in the container
-	SeccompConfig seccomp.SeccompConfig `json:"seccomp_config,omitempty"`
+	SeccompConfig seccomp.Config `json:"seccomp_config,omitempty"`
 }
 
 // Gets the root uid for the process on host which could be non-zero

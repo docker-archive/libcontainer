@@ -21,8 +21,10 @@ func (l *linuxSetnsInit) Init() error {
 	if err := setupRlimits(l.config.Config); err != nil {
 		return err
 	}
-	if err := seccomp.InitSeccomp(l.config.Config.SeccompConfig); err != nil {
-		return err
+	if l.config.Config.SeccompConfig.Enable {
+		if err := seccomp.InitSeccomp(&l.config.Config.SeccompConfig); err != nil {
+			return err
+		}
 	}
 	if err := finalizeNamespace(l.config); err != nil {
 		return err

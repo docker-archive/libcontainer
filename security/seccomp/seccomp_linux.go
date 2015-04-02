@@ -12,22 +12,33 @@ import (
 )
 
 var (
-	actAllow libseccomp.ScmpAction = libseccomp.ActAllow
-	actDeny  libseccomp.ScmpAction = libseccomp.ActErrno.SetReturnCode(int16(syscall.EPERM))
+	actAllow = libseccomp.ActAllow
+	actDeny  = libseccomp.ActErrno.SetReturnCode(int16(syscall.EPERM))
 )
 
 // Filters given syscalls in a container, preventing them from being used
 // Started in the container init process, and carried over to all child processes
-func InitSeccomp(config SeccompConfig) error {
+func InitSeccomp(config *Config) error {
+	if config == nil {
+		return fmt.Errorf("Cannot initialize Seccomp - null config passed!")
+	}
+
 	if !config.Enable {
 		return nil
 	}
 
-	var defaultAction libseccomp.ScmpAction
+	// For a whitelist, deny by default, allow matching calls
+	// For a blacklist, the reverse
+	var (
+		defaultAction libseccomp.ScmpAction
+		matchAction   libseccomp.ScmpAction
+	)
 	if config.WhitelistToggle {
 		defaultAction = actDeny
+		matchAction = actAllow
 	} else {
 		defaultAction = actAllow
+		matchAction = actDeny
 	}
 
 	filter, err := libseccomp.NewFilter(defaultAction)
@@ -36,7 +47,7 @@ func InitSeccomp(config SeccompConfig) error {
 	}
 
 	// Unset no new privs bit
-	if err = filter.SetNoNewPrivsBit(false); err != nil {
+	if err := filter.SetNoNewPrivsBit(false); err != nil {
 		return fmt.Errorf("Error setting no new privileges: %s", err)
 	}
 
@@ -54,7 +65,11 @@ func InitSeccomp(config SeccompConfig) error {
 
 	// Add a rule for each syscall
 	for _, call := range config.Syscalls {
-		if err = blockCall(config.WhitelistToggle, filter, call); err != nil {
+		if call == nil {
+			return fmt.Errorf("Encountered nil syscall while initializing Seccomp!")
+		}
+
+		if err = matchCall(matchAction, filter, call); err != nil {
 			return err
 		}
 	}
@@ -92,7 +107,12 @@ func compareOpFromString(op string) (libseccomp.ScmpCompareOp, error) {
 	}
 }
 
-func blockCall(isWhitelist bool, filter *libseccomp.ScmpFilter, call BlockedSyscall) error {
+// Add a rule to match a single syscall
+func matchCall(action libseccomp.ScmpAction, filter *libseccomp.ScmpFilter, call *BlockedSyscall) error {
+	if call == nil || filter == nil {
+		return fmt.Errorf("Nil passed to matchCall!")
+	}
+
 	if len(call.Name) == 0 {
 		return fmt.Errorf("Empty string is not a valid syscall!")
 	}
@@ -103,19 +123,13 @@ func blockCall(isWhitelist bool, filter *libseccomp.ScmpFilter, call BlockedSysc
 		return nil
 	}
 
-	var action libseccomp.ScmpAction
-
-	if isWhitelist {
-		action = actAllow
-	} else {
-		action = actDeny
-	}
-
+	// Unconditional match - just add the rule
 	if len(call.Conditions) == 0 {
 		if err = filter.AddRule(callNum, action); err != nil {
 			return err
 		}
 	} else {
+		// Conditional match - convert the matches into library format
 		conditions := []libseccomp.ScmpCondition{}
 
 		for _, cond := range call.Conditions {
