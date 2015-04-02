@@ -108,6 +108,15 @@ type Container interface {
 	// Systemerror - System error.
 	Start(process *Process) (err error)
 
+	// Charge the resource usage of the specified process to this container.
+	// Does not join the namespaces of the container.
+	// Process will be killed when the container is destroyed.
+	//
+	// errors:
+	// ContainerDestroyed - Container no longer exists,
+	// Systemerror - System error.
+	ChargeProcess(pid int) error
+
 	// Destroys the container after killing all running processes.
 	//
 	// Any event registrations are removed before the container is destroyed.
