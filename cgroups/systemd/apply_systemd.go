@@ -350,6 +350,20 @@ func (m *Manager) Set(container *configs.Config) error {
 	panic("not implemented")
 }
 
+func (m *Manager) AddProcess(pid int) error {
+	for name, path := range m.Paths {
+		_, ok := subsystems[name]
+		if !ok || !cgroups.PathExists(path) {
+			continue
+		}
+		if err := writeFile(path, fs.CgroupProcesses, strconv.Itoa(pid)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func getUnitName(c *configs.Cgroup) string {
 	return fmt.Sprintf("%s-%s.scope", c.Parent, c.Name)
 }
