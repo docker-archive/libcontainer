@@ -23,10 +23,10 @@ func TestSeccompDenyGetcwd(t *testing.T) {
 	defer remove(rootfs)
 
 	config := newTemplateConfig(rootfs)
-	config.SeccompConfig = seccomp.SeccompConfig{
+	config.SeccompConfig = seccomp.Config{
 		Enable:          true,
 		WhitelistToggle: false,
-		Syscalls: []seccomp.BlockedSyscall{
+		Syscalls: []*seccomp.BlockedSyscall{
 			{
 				Name: "getcwd",
 			},
@@ -90,10 +90,10 @@ func TestSeccompPermitWriteConditional(t *testing.T) {
 	defer remove(rootfs)
 
 	config := newTemplateConfig(rootfs)
-	config.SeccompConfig = seccomp.SeccompConfig{
+	config.SeccompConfig = seccomp.Config{
 		Enable:          true,
 		WhitelistToggle: false,
-		Syscalls: []seccomp.BlockedSyscall{
+		Syscalls: []*seccomp.BlockedSyscall{
 			{
 				Name: "write",
 				Conditions: []seccomp.SyscallCondition{
@@ -143,10 +143,10 @@ func TestSeccompDenyWriteConditional(t *testing.T) {
 	defer remove(rootfs)
 
 	config := newTemplateConfig(rootfs)
-	config.SeccompConfig = seccomp.SeccompConfig{
+	config.SeccompConfig = seccomp.Config{
 		Enable:          true,
 		WhitelistToggle: false,
-		Syscalls: []seccomp.BlockedSyscall{
+		Syscalls: []*seccomp.BlockedSyscall{
 			{
 				Name: "write",
 				Conditions: []seccomp.SyscallCondition{
