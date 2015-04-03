@@ -94,7 +94,7 @@ func (s *MemoryGroup) GetStats(path string, stats *cgroups.Stats) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse memory.usage_in_bytes - %v", err)
 	}
-	stats.MemoryStats.Usage = value
+	stats.MemoryStats.Usage = value - stats.MemoryStats.Stats["cache"]
 	value, err = getCgroupParamUint(path, "memory.max_usage_in_bytes")
 	if err != nil {
 		return fmt.Errorf("failed to parse memory.max_usage_in_bytes - %v", err)
