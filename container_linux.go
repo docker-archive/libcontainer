@@ -303,7 +303,12 @@ func (c *linuxContainer) currentState() (*State, error) {
 		CgroupPaths:          c.cgroupManager.GetPaths(),
 		NamespacePaths:       make(map[configs.NamespaceType]string),
 	}
-	for _, ns := range c.config.Namespaces {
+	for _, ns := range []configs.Namespace{
+		{Type: "NEWNS"},
+		{Type: "NEWUTS"},
+		{Type: "NEWIPC"},
+		{Type: "NEWPID"},
+		{Type: "NEWNET"}} {
 		state.NamespacePaths[ns.Type] = ns.GetPath(c.initProcess.pid())
 	}
 	return state, nil
