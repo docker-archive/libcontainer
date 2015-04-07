@@ -27,9 +27,6 @@ func loadDockerFactory(context *cli.Context) (libcontainer.Factory, error) {
 func loadState(root string) (*libcontainer.State, error) {
 	f, err := os.Open(filepath.Join(root, stateFilename))
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, err
-		}
 		return nil, err
 	}
 	defer f.Close()

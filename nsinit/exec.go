@@ -8,6 +8,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
+	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/utils"
 )
 
@@ -22,6 +23,7 @@ var execCommand = cli.Command{
 	Usage:  "execute a new command inside a container",
 	Action: execAction,
 	Flags: append([]cli.Flag{
+		cli.BoolFlag{Name: "docker", Usage: "run a command in a docker container"},
 		cli.BoolFlag{Name: "tty,t", Usage: "allocate a TTY to the container"},
 		cli.StringFlag{Name: "id", Value: "nsinit", Usage: "specify the ID for a container"},
 		cli.StringFlag{Name: "config", Value: "", Usage: "path to the configuration file"},
@@ -32,17 +34,37 @@ var execCommand = cli.Command{
 }
 
 func execAction(context *cli.Context) {
-	factory, err := loadFactory(context)
-	if err != nil {
-		fatal(err)
+	runInDocker := context.Bool("docker")
+
+	var factory libcontainer.Factory
+	var config *configs.Config
+	var err error
+	if runInDocker {
+		factory, err = loadDockerFactory(context)
+		if err != nil {
+			fatal(err)
+		}
+		config, err = loadDockerConfig(context)
+		if err != nil {
+			fatal(err)
+		}
+	} else {
+		factory, err = loadFactory(context)
+		if err != nil {
+			fatal(err)
+		}
+		config, err = loadConfig(context)
+		if err != nil {
+			fatal(err)
+		}
 	}
-	config, err := loadConfig(context)
-	if err != nil {
-		fatal(err)
-	}
+
 	created := false
 	container, err := factory.Load(context.String("id"))
 	if err != nil {
+		if runInDocker {
+			fatal(err)
+		}
 		created = true
 		if container, err = factory.Create(context.String("id"), config); err != nil {
 			fatal(err)
