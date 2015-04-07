@@ -31,8 +31,10 @@ type CpuStats struct {
 }
 
 type MemoryStats struct {
-	// current res_counter usage for memory
+	// current res_counter usage for memory(without cache part)
 	Usage uint64 `json:"usage,omitempty"`
+	// memory used for cache
+	Cache uint64 `json:"cache,omitempty"`
 	// maximum usage ever recorded.
 	MaxUsage uint64 `json:"max_usage,omitempty"`
 	// TODO(vishh): Export these as stronger types.
