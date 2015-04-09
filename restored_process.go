@@ -4,30 +4,15 @@ package libcontainer
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-	"os/exec"
-	"strconv"
 
 	"github.com/docker/libcontainer/system"
 )
 
-func newRestoredProcess(pidfile string, criuCommand *exec.Cmd) (*restoredProcess, error) {
+func newRestoredProcess(pid int) (*restoredProcess, error) {
 	var (
-		data []byte
-		err  error
+		err error
 	)
-	data, err = ioutil.ReadFile(pidfile)
-	if err != nil {
-		return nil, err
-	}
-	if len(data) == 0 {
-		return nil, fmt.Errorf("empty pidfile, restore failed")
-	}
-	pid, err := strconv.Atoi(string(data))
-	if err != nil {
-		return nil, err
-	}
 	proc, err := os.FindProcess(pid)
 	if err != nil {
 		return nil, err
@@ -37,14 +22,12 @@ func newRestoredProcess(pidfile string, criuCommand *exec.Cmd) (*restoredProcess
 		return nil, err
 	}
 	return &restoredProcess{
-		criuCommand:      criuCommand,
 		proc:             proc,
 		processStartTime: started,
 	}, nil
 }
 
 type restoredProcess struct {
-	criuCommand      *exec.Cmd
 	proc             *os.Process
 	processStartTime string
 }
@@ -68,10 +51,11 @@ func (p *restoredProcess) terminate() error {
 func (p *restoredProcess) wait() (*os.ProcessState, error) {
 	// TODO: how do we wait on the actual process?
 	// maybe use --exec-cmd in criu
-	if err := p.criuCommand.Wait(); err != nil {
+	st, err := p.proc.Wait()
+	if err != nil {
 		return nil, err
 	}
-	return p.criuCommand.ProcessState, nil
+	return st, nil
 }
 
 func (p *restoredProcess) startTime() (string, error) {
