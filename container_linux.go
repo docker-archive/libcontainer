@@ -5,7 +5,6 @@ package libcontainer
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -445,8 +444,6 @@ func (c *linuxContainer) Restore(process *Process, imagePath string) error {
 		return err
 	}
 
-	var pid int32 = math.MinInt32
-
 	buf := make([]byte, 10*4096)
 	for true {
 		n, err := criuClient.Read(buf)
@@ -474,31 +471,8 @@ func (c *linuxContainer) Restore(process *Process, imagePath string) error {
 		t = resp.GetType()
 		switch {
 		case t == criurpc.CriuReqType_NOTIFY:
-			notify := resp.GetNotify()
-			if notify == nil {
-				return fmt.Errorf("invalid response: %s", resp.String())
-			}
-
-			if notify.GetScript() == "setup-namespaces" {
-				pid = notify.GetPid()
-			}
-
-			if notify.GetScript() == "post-restore" {
-				// In many case, restore from the images can be done only once.
-				// If we want to create snapshots, we need to snapshot the file system.
-				os.RemoveAll(imagePath)
-
-				r, err := newRestoredProcess(int(pid))
-				if err != nil {
-					return err
-				}
-
-				// TODO: crosbymichael restore previous process information by saving the init process information in
-				// the container's state file or separate process state files.
-				if err := c.updateState(r); err != nil {
-					return err
-				}
-				process.ops = r
+			if err := c.criuNotifications(resp, process, imagePath); err != nil {
+				return err
 			}
 
 			t = criurpc.CriuReqType_NOTIFY
@@ -516,11 +490,7 @@ func (c *linuxContainer) Restore(process *Process, imagePath string) error {
 			}
 			continue
 		case t == criurpc.CriuReqType_RESTORE:
-			restore := resp.GetRestore()
-			if restore != nil {
-				pid = restore.GetPid()
-				break
-			}
+			break;
 		default:
 			return fmt.Errorf("unable to parse the response %s", resp.String())
 		}
@@ -538,6 +508,36 @@ func (c *linuxContainer) Restore(process *Process, imagePath string) error {
 		return fmt.Errorf("criu failed: %s", st.String())
 	}
 	log.Info("Restored")
+	return nil
+}
+
+func (c *linuxContainer) criuNotifications(resp *criurpc.CriuResp, process *Process, imagePath string) error {
+	notify := resp.GetNotify()
+	if notify == nil {
+		return fmt.Errorf("invalid response: %s", resp.String())
+	}
+
+	switch {
+	case notify.GetScript() == "post-restore":
+		// In many case, restore from the images can be done only once.
+		// If we want to create snapshots, we need to snapshot the file system.
+		os.RemoveAll(imagePath)
+
+		pid := notify.GetPid()
+		r, err := newRestoredProcess(int(pid))
+		if err != nil {
+			return err
+		}
+
+		// TODO: crosbymichael restore previous process information by saving the init process information in
+		// the container's state file or separate process state files.
+		if err := c.updateState(r); err != nil {
+			return err
+		}
+		process.ops = r
+		break
+	}
+
 	return nil
 }
 
