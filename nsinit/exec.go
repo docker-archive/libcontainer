@@ -92,9 +92,16 @@ func execAction(context *cli.Context) {
 		}
 	}
 	if created {
-		if err := container.Destroy(); err != nil {
+		status, err := container.Status()
+		if err != nil {
 			tty.Close()
 			fatal(err)
+		}
+		if status != libcontainer.Checkpointed {
+			if err := container.Destroy(); err != nil {
+				tty.Close()
+				fatal(err)
+			}
 		}
 	}
 	tty.Close()
