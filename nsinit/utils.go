@@ -7,6 +7,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
+	"github.com/docker/libcontainer/cgroups/systemd"
 	"github.com/docker/libcontainer/configs"
 )
 
@@ -29,7 +30,11 @@ func loadConfig(context *cli.Context) (*configs.Config, error) {
 }
 
 func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
-	return libcontainer.New(context.GlobalString("root"), libcontainer.Cgroupfs)
+	cgm := libcontainer.Cgroupfs
+	if context.Bool("systemd") && systemd.UseSystemd() {
+		cgm = libcontainer.SystemdCgroups
+	}
+	return libcontainer.New(context.GlobalString("root"), cgm)
 }
 
 func getContainer(context *cli.Context) (libcontainer.Container, error) {
