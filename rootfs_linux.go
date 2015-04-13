@@ -19,13 +19,21 @@ const defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NOD
 
 // setupRootfs sets up the devices, mount points, and filesystems for use inside a
 // new mount namespace.
-func setupRootfs(config *configs.Config, console *linuxConsole) (err error) {
+func setupRootfs(config *configs.Config, cgroupMounts []*configs.Mount, console *linuxConsole) (err error) {
 	if err := prepareRoot(config); err != nil {
 		return newSystemError(err)
 	}
 	for _, m := range config.Mounts {
 		if err := mountToRootfs(m, config.Rootfs, config.MountLabel); err != nil {
 			return newSystemError(err)
+		}
+	}
+
+	if cgroupMounts != nil {
+		for _, m := range cgroupMounts {
+			if err := mountToRootfs(m, config.Rootfs, config.MountLabel); err != nil {
+				return newSystemError(err)
+			}
 		}
 	}
 	if err := createDevices(config); err != nil {

@@ -5,12 +5,14 @@ package libcontainer
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"syscall"
 
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/system"
 )
 
@@ -151,6 +153,24 @@ func (p *initProcess) pid() int {
 	return p.cmd.Process.Pid
 }
 
+func addCgroupMounts(p *initProcess, cgroupPaths map[string]string) {
+	var cgroupMounts []*configs.Mount
+
+	for cg, path := range cgroupPaths {
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		dest := fmt.Sprintf("/cgroups/%s", cg)
+		cgroupMounts = append(cgroupMounts, &configs.Mount{
+			Source:      path,
+			Destination: dest,
+			Device:      "bind",
+			Flags:       syscall.MS_BIND | syscall.MS_REC | syscall.MS_RDONLY,
+		})
+	}
+	p.config.CgroupMounts = cgroupMounts
+}
+
 func (p *initProcess) start() error {
 	defer p.parentPipe.Close()
 	err := p.cmd.Start()
@@ -163,6 +183,11 @@ func (p *initProcess) start() error {
 	if err := p.manager.Apply(p.pid()); err != nil {
 		return newSystemError(err)
 	}
+
+	cgroupPaths := p.manager.GetPaths()
+
+	addCgroupMounts(p, cgroupPaths)
+
 	defer func() {
 		if err != nil {
 			// TODO: should not be the responsibility to call here
