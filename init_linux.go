@@ -16,6 +16,7 @@ import (
 	"github.com/docker/libcontainer/system"
 	"github.com/docker/libcontainer/user"
 	"github.com/docker/libcontainer/utils"
+	"github.com/docker/libcontainer/seccomp"
 )
 
 type initType string
@@ -257,4 +258,18 @@ func killCgroupProcesses(m cgroups.Manager) error {
 		}
 	}
 	return nil
+}
+
+func finalizeSeccomp(config *initConfig) error {
+        scmpCtx, _ := seccomp.ScmpInit(seccomp.ScmpActAllow)
+        if 0 == len(config.Config.SysCalls) {
+            for key, _ := range seccomp.SyscallMap {
+                seccomp.ScmpAdd(scmpCtx, key, seccomp.ScmpActAllow)
+            }       
+        } else {
+            for _, call := range config.Config.SysCalls {
+                seccomp.ScmpAdd(scmpCtx, call, seccomp.ScmpActAllow)
+            }
+        }
+        return seccomp.ScmpLoad(scmpCtx)
 }
