@@ -49,6 +49,16 @@ type Cgroup struct {
 	// Weight per cgroup per device, can override BlkioWeight.
 	BlkioWeightDevice string `json:"blkio_weight_device"`
 
+	// Specifies upper limit on READ rate from the device.
+	// IO rate is specified in bytes per second. Rules are per device.
+	// Format is: "<major>:<minor> <rate_bytes_per_second>"
+	BlkioReadBpsDevice string `json:"blkio_read_bps_device"`
+
+	// Specifies upper limit on WRITE rate from the device.
+	// IO rate is specified in bytes per second. Rules are per device.
+	// Format is: "<major>:<minor> <rate_bytes_per_second>"
+	BlkioWriteBpsDevice string `json:"blkio_write_bps_device"`
+
 	// set the freeze value for the process
 	Freezer FreezerState `json:"freezer"`
 
