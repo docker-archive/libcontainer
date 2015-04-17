@@ -40,15 +40,16 @@ type network struct {
 
 // initConfig is used for transferring parameters from Exec() to Init()
 type initConfig struct {
-	Args             []string        `json:"args"`
-	Env              []string        `json:"env"`
-	Cwd              string          `json:"cwd"`
-	Capabilities     []string        `json:"capabilities"`
-	User             string          `json:"user"`
-	Config           *configs.Config `json:"config"`
-	Console          string          `json:"console"`
-	Networks         []*network      `json:"network"`
-	PassedFilesCount int             `json:"passed_files_count"`
+	Args             []string         `json:"args"`
+	Env              []string         `json:"env"`
+	Cwd              string           `json:"cwd"`
+	Capabilities     []string         `json:"capabilities"`
+	User             string           `json:"user"`
+	Config           *configs.Config  `json:"config"`
+	Console          string           `json:"console"`
+	Networks         []*network       `json:"network"`
+	PassedFilesCount int              `json:"passed_files_count"`
+	CgroupMounts     []*configs.Mount `json:"cgroup_mounts"`
 }
 
 type initer interface {
