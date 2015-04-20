@@ -33,6 +33,10 @@ func (m *mockCgroupManager) Set(container *configs.Config) error {
 	return nil
 }
 
+func (m *mockCgroupManager) AddProcess(pid int) error {
+	return nil
+}
+
 func (m *mockCgroupManager) Destroy() error {
 	return nil
 }

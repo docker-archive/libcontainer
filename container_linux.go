@@ -114,6 +114,10 @@ func (c *linuxContainer) Start(process *Process) error {
 	return nil
 }
 
+func (c *linuxContainer) ChargeProcess(pid int) error {
+	return c.cgroupManager.AddProcess(pid)
+}
+
 func (c *linuxContainer) newParentProcess(p *Process, doInit bool) (parentProcess, error) {
 	parentPipe, childPipe, err := newPipe()
 	if err != nil {

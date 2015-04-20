@@ -173,6 +173,20 @@ func (m *Manager) Set(container *configs.Config) error {
 	return nil
 }
 
+func (m *Manager) AddProcess(pid int) error {
+	for name, path := range m.Paths {
+		_, ok := subsystems[name]
+		if !ok || !cgroups.PathExists(path) {
+			continue
+		}
+		if err := writeFile(path, CgroupProcesses, strconv.Itoa(pid)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Freeze toggles the container's freezer cgroup depending on the state
 // provided
 func (m *Manager) Freeze(state configs.FreezerState) error {

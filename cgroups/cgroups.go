@@ -34,6 +34,9 @@ type Manager interface {
 
 	// Set the cgroup as configured.
 	Set(container *configs.Config) error
+
+	// Enters the specified process into the cgroup set.
+	AddProcess(pid int) error
 }
 
 type NotFoundError struct {
