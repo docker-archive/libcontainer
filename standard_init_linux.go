@@ -47,8 +47,7 @@ func (l *linuxStandardInit) Init() error {
 		return err
 	}
 	label.Init()
-	// InitializeMountNamespace() can be executed only for a new mount namespace
-	if l.config.Config.Namespaces.Contains(configs.NEWNS) {
+	if l.config.Config.Namespaces.Contains(configs.NEWNS) || l.config.Config.Chroot {
 		if err := setupRootfs(l.config.Config, console); err != nil {
 			return err
 		}

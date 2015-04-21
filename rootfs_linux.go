@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/label"
 )
@@ -20,6 +21,9 @@ const defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NOD
 // setupRootfs sets up the devices, mount points, and filesystems for use inside a
 // new mount namespace.
 func setupRootfs(config *configs.Config, console *linuxConsole) (err error) {
+	mntNs := config.Namespaces.Contains(configs.NEWNS)
+	fmt.Printf("!!!!!!!!!! mount ns to %v\n", mntNs)
+
 	if err := prepareRoot(config); err != nil {
 		return newSystemError(err)
 	}
@@ -45,20 +49,79 @@ func setupRootfs(config *configs.Config, console *linuxConsole) (err error) {
 	if err := syscall.Chdir(config.Rootfs); err != nil {
 		return newSystemError(err)
 	}
-	if config.NoPivotRoot {
+	if config.Namespaces.Contains(configs.NEWNS) {
+		if config.Chroot {
 		err = msMoveRoot(config.Rootfs)
 	} else {
 		err = pivotRoot(config.Rootfs, config.PivotDir)
 	}
+	} else if config.Chroot {
+		err = chroot(config.Rootfs)
+	}
+
 	if err != nil {
 		return newSystemError(err)
 	}
-	if config.Readonlyfs {
+	if config.Readonlyfs && config.Namespaces.Contains(configs.NEWNS) {
 		if err := setReadonly(); err != nil {
 			return newSystemError(err)
 		}
 	}
 	syscall.Umask(0022)
+	return nil
+}
+
+func teardownRootfs(config *configs.Config) (err error) {
+	for _, m := range config.Mounts {
+		if err := teardownMountInRootfs(m, config.Rootfs); err != nil {
+			return newSystemError(err)
+		}
+	}
+	if err := unmountAll(config.Rootfs); err != nil {
+		return newSystemError(err)
+	}
+	return nil
+}
+
+func unmountAll(rootfs string) (err error) {
+	umount := []string{}
+	mounted, err := mount.GetMounts()
+	if err != nil {
+		return err
+	}
+	for _, mount := range mounted {
+		if strings.HasPrefix(mount.Mountpoint, rootfs+"/") {
+			fmt.Printf("!!!!!!!! a mount : %s\n", mount.Mountpoint)
+			umount = append(umount, mount.Mountpoint)
+		}
+	}
+	for i := len(umount) - 1; i >= 0; i-- {
+		fmt.Printf("!!!!!!!! umount : %s\n", umount[i])
+		if uerr := syscall.Unmount(umount[i], 0); uerr != nil {
+			err = uerr
+		}
+	}
+
+	return err
+}
+
+func teardownMountInRootfs(m *configs.Mount, rootfs string) error {
+	var (
+		dest = m.Destination
+	)
+	if !strings.HasPrefix(dest, rootfs) {
+		dest = filepath.Join(rootfs, dest)
+	}
+
+	switch m.Device {
+	case "bind":
+		fmt.Printf("!!!!!! private %s\n", dest)
+		if err := syscall.Mount("", dest, "none", uintptr(syscall.MS_PRIVATE), ""); err != nil {
+			return err
+		}
+	default:
+	}
+
 	return nil
 }
 
@@ -240,8 +303,12 @@ func mknodDevice(dest string, node *configs.Device) error {
 }
 
 func prepareRoot(config *configs.Config) error {
+	if !config.Namespaces.Contains(configs.NEWNS) {
+		return nil
+	}
+
 	flag := syscall.MS_PRIVATE | syscall.MS_REC
-	if config.NoPivotRoot {
+	if config.Chroot {
 		flag = syscall.MS_SLAVE | syscall.MS_REC
 	}
 	if err := syscall.Mount("", "/", "", uintptr(flag), ""); err != nil {
@@ -292,6 +359,14 @@ func pivotRoot(rootfs, pivotBaseDir string) error {
 		return fmt.Errorf("unmount pivot_root dir %s", err)
 	}
 	return os.Remove(pivotDir)
+}
+
+func chroot(rootfs string) error {
+	fmt.Printf("chroot to %s\n", rootfs)
+	if err := syscall.Chroot(rootfs); err != nil {
+		return err
+	}
+	return syscall.Chdir("/")
 }
 
 func msMoveRoot(rootfs string) error {

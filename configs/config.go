@@ -19,10 +19,6 @@ type IDMap struct {
 type Config struct {
 	// NoPivotRoot will use MS_MOVE and a chroot to jail the process into the container's rootfs
 	// This is a common option when the container is running in ramdisk
-	NoPivotRoot bool `json:"no_pivot_root"`
-
-	// ParentDeathSignal specifies the signal that is sent to the container's process in the case
-	// that the parent process dies.
 	ParentDeathSignal int `json:"parent_death_signal"`
 
 	// PivotDir allows a custom directory inside the container's root filesystem to be used as pivot, when NoPivotRoot is not set.
@@ -96,6 +92,11 @@ type Config struct {
 	// ReadonlyPaths specifies paths within the container's rootfs to remount as read-only
 	// so that these files prevent any writes.
 	ReadonlyPaths []string `json:"readonly_paths"`
+
+	// Chroot indicates that the container's process should be chrooted to the Rootfs
+	// If a mount namespace is created this means that we prefer to chroot rather than
+	// pivot_root.  If there is no mount namespace a regular Chroot will be done.
+	Chroot bool `json:"chroot"`
 }
 
 // Gets the root uid for the process on host which could be non-zero

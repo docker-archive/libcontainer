@@ -229,7 +229,12 @@ func (c *linuxContainer) Destroy() error {
 		}
 	}
 	err = c.cgroupManager.Destroy()
-	if rerr := os.RemoveAll(c.root); err == nil {
+	if !c.config.Namespaces.Contains(configs.NEWNS) {
+		if err := teardownRootfs(c.config); err != nil {
+			log.Warn(err)
+		}
+	}
+	if rerr := os.RemoveAll(c.root); rerr == nil {
 		err = rerr
 	}
 	c.initProcess = nil
