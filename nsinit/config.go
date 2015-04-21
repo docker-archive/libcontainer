@@ -28,6 +28,7 @@ var createFlags = []cli.Flag{
 	cli.IntFlag{Name: "memory-swap", Usage: "set the memory swap limit for the container"},
 	cli.StringFlag{Name: "cpuset-cpus", Usage: "set the cpuset cpus"},
 	cli.StringFlag{Name: "cpuset-mems", Usage: "set the cpuset mems"},
+	cli.StringFlag{Name: "cgroup-parent", Usage: "set the cgroup parent"},
 	cli.StringFlag{Name: "apparmor-profile", Usage: "set the apparmor profile"},
 	cli.StringFlag{Name: "process-label", Usage: "set the process label"},
 	cli.StringFlag{Name: "mount-label", Usage: "set the mount label"},
@@ -91,6 +92,11 @@ func modify(config *configs.Config, context *cli.Context) {
 	rootfs := context.String("rootfs")
 	if rootfs != "" {
 		config.Rootfs = rootfs
+	}
+
+	cgroupParent := context.String("cgroup-parent")
+	if cgroupParent != "" {
+		config.Cgroups.Parent = cgroupParent
 	}
 
 	userns_uid := context.Int("userns-root-uid")
@@ -229,7 +235,7 @@ func getTemplate() *configs.Config {
 		}),
 		Cgroups: &configs.Cgroup{
 			Name:            filepath.Base(cwd),
-			Parent:          "nsinit",
+			ScopePrefix:     "nsinit",
 			AllowAllDevices: false,
 			AllowedDevices:  configs.DefaultAllowedDevices,
 		},
