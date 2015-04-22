@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -285,7 +286,7 @@ func (c *linuxContainer) checkCriuVersion() error {
 	return nil
 }
 
-func (c *linuxContainer) Checkpoint(imagePath string) error {
+func (c *linuxContainer) Checkpoint(imagePath string, psAddress string, port string) error {
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -323,6 +324,19 @@ func (c *linuxContainer) Checkpoint(imagePath string) error {
 			Pid:           proto.Int32(int32(c.initProcess.pid())),
 		},
 	}
+
+	if psAddress != "" && port != "" {
+		// XXX port in criurpc.proto maybe changed to string
+		port_int, err := strconv.Atoi(port)
+		if err != nil {
+			return err
+		}
+		req.Opts.Ps = &criurpc.CriuPageServerInfo{
+			Address: proto.String(psAddress),
+			Port:    proto.Int32(int32(port_int)),
+		}
+	}
+
 	for _, m := range c.config.Mounts {
 		if m.Device == "bind" {
 			mountDest := m.Destination
