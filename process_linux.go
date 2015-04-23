@@ -5,12 +5,15 @@ package libcontainer
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"syscall"
 
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/cgroups/systemd"
+	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/system"
 )
 
@@ -154,6 +157,52 @@ func (p *initProcess) pid() int {
 	return p.cmd.Process.Pid
 }
 
+func addCgroupMounts(p *initProcess, cgroupPaths map[string]string) {
+	var cgroupMounts []*configs.Mount
+
+	cgroupFSPath, err := cgroups.FindCgroupMountpointDir()
+	if err != nil {
+		cgroupFSPath = "/sys/fs/cgroup"
+	}
+
+	if systemd.UseSystemd() {
+		cgroupMounts = append(cgroupMounts, &configs.Mount{
+			Source:      cgroupFSPath,
+			Destination: cgroupFSPath,
+			Device:      "bind",
+			Flags:       syscall.MS_BIND | syscall.MS_REC | syscall.MS_RDONLY,
+		})
+	} else {
+		cgroupMounts = append(cgroupMounts, &configs.Mount{
+			Source:      "tmpfs",
+			Destination: cgroupFSPath,
+			Device:      "tmpfs",
+			Flags:       syscall.MS_REC,
+		})
+	}
+
+	cgroupMounts = append(cgroupMounts, &configs.Mount{
+		Source:      "tmpfs",
+		Destination: cgroupFSPath + "/systemd",
+		Device:      "tmpfs",
+		Flags:       syscall.MS_REC | syscall.MS_RDONLY,
+	})
+
+	for cg, path := range cgroupPaths {
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		dest := fmt.Sprintf("%s/%s", cgroupFSPath, cg)
+		cgroupMounts = append(cgroupMounts, &configs.Mount{
+			Source:      path,
+			Destination: dest,
+			Device:      "bind",
+			Flags:       syscall.MS_BIND | syscall.MS_REC | syscall.MS_RDONLY,
+		})
+	}
+	p.config.CgroupMounts = cgroupMounts
+}
+
 func (p *initProcess) start() error {
 	defer p.parentPipe.Close()
 	err := p.cmd.Start()
@@ -166,6 +215,9 @@ func (p *initProcess) start() error {
 	if err := p.manager.Apply(p.pid()); err != nil {
 		return newSystemError(err)
 	}
+
+	addCgroupMounts(p, p.manager.GetPaths())
+
 	defer func() {
 		if err != nil {
 			// TODO: should not be the responsibility to call here
