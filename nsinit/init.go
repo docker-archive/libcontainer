@@ -16,7 +16,7 @@ var initCommand = cli.Command{
 		log.SetLevel(log.DebugLevel)
 		runtime.GOMAXPROCS(1)
 		runtime.LockOSThread()
-		factory, err := libcontainer.New("")
+		factory, err := libcontainer.New("", libcontainer.Cgroupfs)
 		if err != nil {
 			fatal(err)
 		}
