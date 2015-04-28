@@ -1,0 +1,4 @@
+scmp_bpf_disasm
+scmp_bpf_sim
+scmp_sys_resolver
+scmp_arch_detect
