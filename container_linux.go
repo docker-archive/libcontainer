@@ -556,6 +556,14 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 		log.Warn(st.String())
 	}()
 
+	if process != nil {
+		fds, err := getPipeFds(cmd.Process.Pid)
+		if err != nil {
+			return err
+		}
+		c.initProcess.setStdFds(fds)
+	}
+
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return err
@@ -690,7 +698,7 @@ func (c *linuxContainer) criuNotifications(resp *criurpc.CriuResp, process *Proc
 
 	case notify.GetScript() == "post-restore":
 		pid := notify.GetPid()
-		r, err := newRestoredProcess(int(pid))
+		r, err := newRestoredProcess(int(pid), c.initProcess.stdFds())
 		if err != nil {
 			return err
 		}
