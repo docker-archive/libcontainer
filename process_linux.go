@@ -34,9 +34,9 @@ type parentProcess interface {
 
 	signal(os.Signal) error
 
-	stdFds() [3]string
+	externalDescriptors() [3]string
 
-	setStdFds(fds [3]string)
+	setExternalDescriptors(fds [3]string)
 }
 
 type setnsProcess struct {
@@ -146,11 +146,11 @@ func (p *setnsProcess) pid() int {
 	return p.cmd.Process.Pid
 }
 
-func (p *setnsProcess) stdFds() [3]string {
+func (p *setnsProcess) externalDescriptors() [3]string {
 	return p.fds
 }
 
-func (p *setnsProcess) setStdFds(newFds [3]string) {
+func (p *setnsProcess) setExternalDescriptors(newFds [3]string) {
 	p.fds = newFds
 }
 
@@ -168,7 +168,7 @@ func (p *initProcess) pid() int {
 	return p.cmd.Process.Pid
 }
 
-func (p *initProcess) stdFds() [3]string {
+func (p *initProcess) externalDescriptors() [3]string {
 	return p.fds
 }
 
@@ -186,7 +186,7 @@ func (p *initProcess) start() error {
 	if err != nil {
 		return newSystemError(err)
 	}
-	p.setStdFds(fds);
+	p.setExternalDescriptors(fds);
 
 	// Do this before syncing with child so that no children
 	// can escape the cgroup
@@ -278,7 +278,7 @@ func (p *initProcess) signal(sig os.Signal) error {
 	return syscall.Kill(p.cmd.Process.Pid, s)
 }
 
-func (p *initProcess) setStdFds(newFds [3]string) {
+func (p *initProcess) setExternalDescriptors(newFds [3]string) {
 	p.fds = newFds
 }
 
