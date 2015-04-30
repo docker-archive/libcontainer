@@ -44,6 +44,7 @@ var createFlags = []cli.Flag{
 	cli.StringFlag{Name: "veth-gateway", Usage: "veth gateway address"},
 	cli.IntFlag{Name: "veth-mtu", Usage: "veth mtu"},
 	cli.BoolFlag{Name: "cgroup", Usage: "mount the cgroup data for the container"},
+	cli.StringSliceFlag{Name: "groups", Value: &cli.StringSlice{}, Usage: "add additional groups"},
 }
 
 var configCommand = cli.Command{
@@ -110,6 +111,9 @@ func modify(config *configs.Config, context *cli.Context) {
 			node.Uid = uint32(userns_uid)
 			node.Gid = uint32(userns_uid)
 		}
+	}
+	for _, group := range context.StringSlice("groups") {
+		config.AdditionalGroups = append(config.AdditionalGroups, group)
 	}
 	for _, rawBind := range context.StringSlice("bind") {
 		mount := &configs.Mount{
