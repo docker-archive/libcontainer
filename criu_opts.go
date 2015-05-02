@@ -14,3 +14,5 @@ type CriuOpts struct {
 	ShellJob                bool               // allow to dump and restore shell jobs
 	PageServer              CriuPageServerInfo // allow to dump to criu page server
 }
+
+var CriuPath string
