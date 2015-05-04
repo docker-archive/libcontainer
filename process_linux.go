@@ -13,7 +13,6 @@ import (
 	"syscall"
 
 	"github.com/docker/libcontainer/cgroups"
-	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/system"
 )
 
@@ -34,6 +33,10 @@ type parentProcess interface {
 	startTime() (string, error)
 
 	signal(os.Signal) error
+
+	externalDescriptors() []string
+
+	setExternalDescriptors(fds []string)
 }
 
 type setnsProcess struct {
@@ -42,6 +45,7 @@ type setnsProcess struct {
 	childPipe   *os.File
 	cgroupPaths map[string]string
 	config      *initConfig
+	fds         []string
 }
 
 func (p *setnsProcess) startTime() (string, error) {
@@ -142,16 +146,30 @@ func (p *setnsProcess) pid() int {
 	return p.cmd.Process.Pid
 }
 
+func (p *setnsProcess) externalDescriptors() []string {
+	return p.fds
+}
+
+func (p *setnsProcess) setExternalDescriptors(newFds []string) {
+	p.fds = newFds
+}
+
 type initProcess struct {
 	cmd        *exec.Cmd
 	parentPipe *os.File
 	childPipe  *os.File
 	config     *initConfig
 	manager    cgroups.Manager
+	container  *linuxContainer
+	fds        []string
 }
 
 func (p *initProcess) pid() int {
 	return p.cmd.Process.Pid
+}
+
+func (p *initProcess) externalDescriptors() []string {
+	return p.fds
 }
 
 func (p *initProcess) start() error {
@@ -164,9 +182,12 @@ func (p *initProcess) start() error {
 	// Save the standard descriptor names before the container process
 	// can potentially move them (e.g., via dup2()).  If we don't do this now,
 	// we won't know at checkpoint time which file descriptor to look up.
-	if err = saveStdPipes(p.pid(), p.config.Config); err != nil {
+	fds, err := getPipeFds(p.pid())
+	if err != nil {
 		return newSystemError(err)
 	}
+	p.setExternalDescriptors(fds)
+
 	// Do this before syncing with child so that no children
 	// can escape the cgroup
 	if err := p.manager.Apply(p.pid()); err != nil {
@@ -257,18 +278,23 @@ func (p *initProcess) signal(sig os.Signal) error {
 	return syscall.Kill(p.cmd.Process.Pid, s)
 }
 
-// Save process's std{in,out,err} file names as these will be
-// removed if/when the container is checkpointed.  We will need
-// this info to restore the container.
-func saveStdPipes(pid int, config *configs.Config) error {
+func (p *initProcess) setExternalDescriptors(newFds []string) {
+	p.fds = newFds
+}
+
+func getPipeFds(pid int) ([]string, error) {
+	var fds []string
+
+	fds = make([]string, 3)
+
 	dirPath := filepath.Join("/proc", strconv.Itoa(pid), "/fd")
 	for i := 0; i < 3; i++ {
 		f := filepath.Join(dirPath, strconv.Itoa(i))
 		target, err := os.Readlink(f)
 		if err != nil {
-			return err
+			return fds, err
 		}
-		config.StdFds[i] = target
+		fds[i] = target
 	}
-	return nil
+	return fds, nil
 }
