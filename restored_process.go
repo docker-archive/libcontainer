@@ -9,7 +9,7 @@ import (
 	"github.com/docker/libcontainer/system"
 )
 
-func newRestoredProcess(pid int) (*restoredProcess, error) {
+func newRestoredProcess(pid int, fds []string) (*restoredProcess, error) {
 	var (
 		err error
 	)
@@ -24,12 +24,14 @@ func newRestoredProcess(pid int) (*restoredProcess, error) {
 	return &restoredProcess{
 		proc:             proc,
 		processStartTime: started,
+		fds:              fds,
 	}, nil
 }
 
 type restoredProcess struct {
 	proc             *os.Process
 	processStartTime string
+	fds              []string
 }
 
 func (p *restoredProcess) start() error {
@@ -66,12 +68,21 @@ func (p *restoredProcess) signal(s os.Signal) error {
 	return p.proc.Signal(s)
 }
 
+func (p *restoredProcess) externalDescriptors() []string {
+	return p.fds
+}
+
+func (p *restoredProcess) setExternalDescriptors(newFds []string) {
+	p.fds = newFds
+}
+
 // nonChildProcess represents a process where the calling process is not
 // the parent process.  This process is created when a factory loads a container from
 // a persisted state.
 type nonChildProcess struct {
 	processPid       int
 	processStartTime string
+	fds              []string
 }
 
 func (p *nonChildProcess) start() error {
@@ -96,4 +107,12 @@ func (p *nonChildProcess) startTime() (string, error) {
 
 func (p *nonChildProcess) signal(s os.Signal) error {
 	return newGenericError(fmt.Errorf("restored process cannot be signaled"), SystemError)
+}
+
+func (p *nonChildProcess) externalDescriptors() []string {
+	return p.fds
+}
+
+func (p *nonChildProcess) setExternalDescriptors(newFds []string) {
+	p.fds = newFds
 }

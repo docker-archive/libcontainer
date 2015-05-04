@@ -96,9 +96,6 @@ type Config struct {
 	// ReadonlyPaths specifies paths within the container's rootfs to remount as read-only
 	// so that these files prevent any writes.
 	ReadonlyPaths []string `json:"readonly_paths"`
-
-	// Container's standard descriptors (std{in,out,err}), needed for checkpoint and restore
-	StdFds [3]string `json:"ext_pipes,omitempty"`
 }
 
 // Gets the root uid for the process on host which could be non-zero
