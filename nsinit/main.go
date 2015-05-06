@@ -5,6 +5,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	"github.com/docker/libcontainer"
 )
 
 func main() {
@@ -40,6 +41,9 @@ func main() {
 				return err
 			}
 			log.SetOutput(f)
+		}
+		if criuPath := context.GlobalString("criu"); criuPath != "" {
+			libcontainer.CriuPath = criuPath
 		}
 		return nil
 	}

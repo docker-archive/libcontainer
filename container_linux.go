@@ -28,7 +28,6 @@ type linuxContainer struct {
 	initPath      string
 	initArgs      []string
 	initProcess   parentProcess
-	criuPath      string
 	m             sync.Mutex
 }
 
@@ -269,7 +268,7 @@ func addArgsFromEnv(evar string, args *[]string) {
 func (c *linuxContainer) checkCriuVersion() error {
 	var x, y, z int
 
-	out, err := exec.Command(c.criuPath, "-V").Output()
+	out, err := exec.Command(CriuPath, "-V").Output()
 	if err != nil {
 		return err
 	}
@@ -537,7 +536,7 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 	defer criuServer.Close()
 
 	args := []string{"swrk", "3"}
-	cmd := exec.Command(c.criuPath, args...)
+	cmd := exec.Command(CriuPath, args...)
 	if process != nil {
 		cmd.Stdin = process.Stdin
 		cmd.Stdout = process.Stdout
