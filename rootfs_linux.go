@@ -215,6 +215,7 @@ func checkMountDestination(rootfs, dest string) error {
 	}
 	invalidDestinations := []string{
 		"/proc",
+		"/sys",
 	}
 	for _, invalid := range invalidDestinations {
 		path, err := filepath.Rel(filepath.Join(rootfs, invalid), dest)
