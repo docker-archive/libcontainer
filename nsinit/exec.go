@@ -11,24 +11,18 @@ import (
 	"github.com/docker/libcontainer/utils"
 )
 
-var standardEnvironment = &cli.StringSlice{
-	"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-	"HOSTNAME=nsinit",
-	"TERM=xterm",
-}
-
 var execCommand = cli.Command{
 	Name:   "exec",
 	Usage:  "execute a new command inside a container",
 	Action: execAction,
 	Flags: append([]cli.Flag{
+		idFlag,
 		cli.BoolFlag{Name: "tty,t", Usage: "allocate a TTY to the container"},
 		cli.BoolFlag{Name: "systemd", Usage: "Use systemd for managing cgroups, if available"},
-		cli.StringFlag{Name: "id", Value: "nsinit", Usage: "specify the ID for a container"},
 		cli.StringFlag{Name: "config", Value: "", Usage: "path to the configuration file"},
 		cli.StringFlag{Name: "user,u", Value: "root", Usage: "set the user, uid, and/or gid for the process"},
 		cli.StringFlag{Name: "cwd", Value: "", Usage: "set the current working dir"},
-		cli.StringSliceFlag{Name: "env", Value: standardEnvironment, Usage: "set environment variables for the process"},
+		cli.StringSliceFlag{Name: "env", Value: &cli.StringSlice{}, Usage: "set environment variables for the process"},
 	}, createFlags...),
 }
 
@@ -51,7 +45,7 @@ func execAction(context *cli.Context) {
 	}
 	process := &libcontainer.Process{
 		Args:   context.Args(),
-		Env:    context.StringSlice("env"),
+		Env:    append(os.Environ(), context.StringSlice("env")...),
 		User:   context.String("user"),
 		Cwd:    context.String("cwd"),
 		Stdin:  os.Stdin,
@@ -66,19 +60,14 @@ func execAction(context *cli.Context) {
 	if err != nil {
 		fatal(err)
 	}
-	if err := tty.attach(process); err != nil {
-		fatal(err)
-	}
 	go handleSignals(process, tty)
-	err = container.Start(process)
-	if err != nil {
+	if err := container.Start(process); err != nil {
 		tty.Close()
 		if created {
 			container.Destroy()
 		}
 		fatal(err)
 	}
-
 	status, err := process.Wait()
 	if err != nil {
 		exitError, ok := err.(*exec.ExitError)

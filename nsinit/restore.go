@@ -27,22 +27,18 @@ var restoreCommand = cli.Command{
 		if imagePath == "" {
 			fatal(fmt.Errorf("The --image-path option isn't specified"))
 		}
-
 		var (
 			container libcontainer.Container
 			err       error
 		)
-
 		factory, err := loadFactory(context)
 		if err != nil {
 			fatal(err)
 		}
-
 		config, err := loadConfig(context)
 		if err != nil {
 			fatal(err)
 		}
-
 		created := false
 		container, err = factory.Load(context.String("id"))
 		if err != nil {
@@ -51,7 +47,6 @@ var restoreCommand = cli.Command{
 				fatal(err)
 			}
 		}
-
 		process := &libcontainer.Process{
 			Stdin:  os.Stdin,
 			Stdout: os.Stdout,
@@ -66,11 +61,7 @@ var restoreCommand = cli.Command{
 		if err != nil {
 			fatal(err)
 		}
-		if err := tty.attach(process); err != nil {
-			fatal(err)
-		}
 		go handleSignals(process, tty)
-
 		err = container.Restore(process, &libcontainer.CriuOpts{
 			ImagesDirectory:         imagePath,
 			WorkDirectory:           context.String("work-path"),
@@ -85,7 +76,6 @@ var restoreCommand = cli.Command{
 			}
 			fatal(err)
 		}
-
 		status, err := process.Wait()
 		if err != nil {
 			exitError, ok := err.(*exec.ExitError)
@@ -99,7 +89,6 @@ var restoreCommand = cli.Command{
 				fatal(err)
 			}
 		}
-
 		if created {
 			status, err := container.Status()
 			if err != nil {
@@ -113,7 +102,6 @@ var restoreCommand = cli.Command{
 				}
 			}
 		}
-
 		tty.Close()
 		os.Exit(utils.ExitStatus(status.Sys().(syscall.WaitStatus)))
 	},

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/utils"
 )
@@ -33,7 +34,7 @@ var createFlags = []cli.Flag{
 	cli.StringFlag{Name: "mount-label", Usage: "set the mount label"},
 	cli.StringFlag{Name: "rootfs", Usage: "set the rootfs"},
 	cli.IntFlag{Name: "userns-root-uid", Usage: "set the user namespace root uid"},
-	cli.StringFlag{Name: "hostname", Value: "nsinit", Usage: "hostname value for the container"},
+	cli.StringFlag{Name: "hostname", Value: getDefaultID(), Usage: "hostname value for the container"},
 	cli.StringFlag{Name: "net", Value: "", Usage: "network namespace"},
 	cli.StringFlag{Name: "ipc", Value: "", Usage: "ipc namespace"},
 	cli.StringFlag{Name: "pid", Value: "", Usage: "pid namespace"},
@@ -88,12 +89,10 @@ func modify(config *configs.Config, context *cli.Context) {
 	config.AppArmorProfile = context.String("apparmor-profile")
 	config.ProcessLabel = context.String("process-label")
 	config.MountLabel = context.String("mount-label")
-
 	rootfs := context.String("rootfs")
 	if rootfs != "" {
 		config.Rootfs = rootfs
 	}
-
 	userns_uid := context.Int("userns-root-uid")
 	if userns_uid != 0 {
 		config.Namespaces.Add(configs.NEWUSER, "")
@@ -210,6 +209,10 @@ func getTemplate() *configs.Config {
 	if err != nil {
 		panic(err)
 	}
+	cgroupRoot, err := cgroups.GetThisCgroupDir("devices")
+	if err != nil {
+		panic(err)
+	}
 	return &configs.Config{
 		Rootfs:            cwd,
 		ParentDeathSignal: int(syscall.SIGKILL),
@@ -238,7 +241,7 @@ func getTemplate() *configs.Config {
 		}),
 		Cgroups: &configs.Cgroup{
 			Name:            filepath.Base(cwd),
-			Parent:          "nsinit",
+			Parent:          cgroupRoot,
 			AllowAllDevices: false,
 			AllowedDevices:  configs.DefaultAllowedDevices,
 		},

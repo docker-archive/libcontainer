@@ -9,7 +9,7 @@ var oomCommand = cli.Command{
 	Name:  "oom",
 	Usage: "display oom notifications for a container",
 	Flags: []cli.Flag{
-		cli.StringFlag{Name: "id", Value: "nsinit", Usage: "specify the ID for a container"},
+		idFlag,
 	},
 	Action: func(context *cli.Context) {
 		container, err := getContainer(context)

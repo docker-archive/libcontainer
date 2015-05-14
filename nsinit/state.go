@@ -11,7 +11,7 @@ var stateCommand = cli.Command{
 	Name:  "state",
 	Usage: "get the container's current state",
 	Flags: []cli.Flag{
-		cli.StringFlag{Name: "id", Value: "nsinit", Usage: "specify the ID for a container"},
+		idFlag,
 	},
 	Action: func(context *cli.Context) {
 		container, err := getContainer(context)
