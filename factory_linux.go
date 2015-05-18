@@ -105,6 +105,7 @@ func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
 	l := &LinuxFactory{
 		Root:      root,
 		Validator: validate.New(),
+		CriuPath:  "criu",
 	}
 	InitArgs(os.Args[0], "init")(l)
 	Cgroupfs(l)
