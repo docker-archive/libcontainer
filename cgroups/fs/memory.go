@@ -88,7 +88,7 @@ func (s *MemoryGroup) GetStats(path string, stats *cgroups.Stats) error {
 
 	sc := bufio.NewScanner(statsFile)
 	for sc.Scan() {
-		t, v, err := getCgroupParamKeyValue(sc.Text())
+		t, v, err := GetCgroupParamKeyValue(sc.Text())
 		if err != nil {
 			return fmt.Errorf("failed to parse memory.stat (%q) - %v", sc.Text(), err)
 		}
