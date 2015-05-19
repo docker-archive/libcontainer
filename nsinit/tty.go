@@ -9,6 +9,7 @@ import (
 	"github.com/docker/libcontainer"
 )
 
+// newTty creates a new pty for use with the container.
 func newTty(context *cli.Context, p *libcontainer.Process, rootuid int) (*tty, error) {
 	if context.Bool("tty") {
 		console, err := p.NewConsole(rootuid)

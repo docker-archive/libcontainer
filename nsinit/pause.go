@@ -7,7 +7,7 @@ import (
 
 var pauseCommand = cli.Command{
 	Name:  "pause",
-	Usage: "pause the container's processes",
+	Usage: "pause the container",
 	Flags: []cli.Flag{
 		idFlag,
 	},
@@ -24,7 +24,7 @@ var pauseCommand = cli.Command{
 
 var unpauseCommand = cli.Command{
 	Name:  "unpause",
-	Usage: "unpause the container's processes",
+	Usage: "unpause the container",
 	Flags: []cli.Flag{
 		idFlag,
 	},

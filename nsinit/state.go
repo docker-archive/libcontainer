@@ -9,7 +9,7 @@ import (
 
 var stateCommand = cli.Command{
 	Name:  "state",
-	Usage: "get the container's current state",
+	Usage: "dump the container state",
 	Flags: []cli.Flag{
 		idFlag,
 	},

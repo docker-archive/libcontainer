@@ -7,46 +7,51 @@ import (
 	"github.com/codegangsta/cli"
 )
 
+const (
+	version = "4"
+	usage   = `standalone container runtime
+
+nsinit integrates well with existing process supervisors to provide a production container runtime environment for
+applications.  It can be used with your existing process monitoring tools and the container will be spawned as direct 
+child of the process supervisor.  nsinit can be used to manage the lifetime of a single container.
+
+Execute a simple container in your shell by running: 
+
+    nsinit exec --tty bash
+`
+)
+
 var idFlag = cli.StringFlag{
 	Name:  "id",
 	Value: getDefaultID(),
-	Usage: "specify the ID for a container",
+	Usage: "specify the ID to be used for the container",
 }
 
 func main() {
 	app := cli.NewApp()
-	app.Usage = "standalone container runtime"
 	app.Name = "nsinit"
-	app.Version = "3"
-	app.Author = "libcontainer maintainers"
+	app.Usage = usage
+	app.Version = version
+	app.Author = "with ♥ by docker"
 	app.Flags = []cli.Flag{
-		cli.StringFlag{Name: "root", Value: "/var/run/nsinit", Usage: "root directory for container state"},
-		cli.BoolFlag{Name: "debug", Usage: "enable debug output in the logs"},
-		cli.StringFlag{Name: "root", Value: "/var/run/nsinit", Usage: "root directory for containers"},
+		cli.BoolFlag{Name: "debug", Usage: "enable debug output for logging"},
 		cli.StringFlag{Name: "criu", Value: "criu", Usage: "path to the criu binary for checkpoint and restore"},
+		cli.StringFlag{Name: "root", Value: "/var/run/nsinit", Usage: "root directory for storage of container state (this should be located in tmpfs)"},
 	}
 	app.Commands = []cli.Command{
 		checkpointCommand,
 		configCommand,
+		eventsCommand,
 		execCommand,
 		initCommand,
-		oomCommand,
 		pauseCommand,
-		stateCommand,
-		statsCommand,
-		unpauseCommand,
 		restoreCommand,
+		stateCommand,
+		unpauseCommand,
 	}
 	app.Before = func(context *cli.Context) error {
 		if context.GlobalBool("debug") {
 			logrus.SetLevel(logrus.DebugLevel)
-		}
-		if path := context.GlobalString("log-file"); path != "" {
-			f, err := os.Create(path)
-			if err != nil {
-				return err
-			}
-			logrus.SetOutput(f)
 		}
 		return nil
 	}
