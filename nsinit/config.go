@@ -1,9 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	"github.com/docker/docker/pkg/units"
 	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/utils"
@@ -23,8 +23,6 @@ var createFlags = []cli.Flag{
 	cli.BoolFlag{Name: "cgroup", Usage: "mount the cgroup data for the container"},
 	cli.BoolFlag{Name: "read-only", Usage: "set the container's rootfs as read-only"},
 	cli.IntFlag{Name: "cpushares", Usage: "set the cpushares for the container"},
-	cli.IntFlag{Name: "memory-limit", Usage: "set the memory limit for the container"},
-	cli.IntFlag{Name: "memory-swap", Usage: "set the memory swap limit for the container"},
 	cli.IntFlag{Name: "parent-death-signal", Usage: "set the signal that will be delivered to the process in case the parent dies"},
 	cli.IntFlag{Name: "userns", Usage: "set the user namespace root uid"},
 	cli.IntFlag{Name: "veth-mtu", Usage: "veth mtu"},
@@ -33,6 +31,8 @@ var createFlags = []cli.Flag{
 	cli.StringFlag{Name: "cpuset-mems", Usage: "set the cpuset mems"},
 	cli.StringFlag{Name: "hostname", Value: getDefaultID(), Usage: "hostname value for the container"},
 	cli.StringFlag{Name: "ipc", Value: "", Usage: "ipc namespace"},
+	cli.StringFlag{Name: "memory-limit", Usage: "set the memory limit for the container(32M)"},
+	cli.StringFlag{Name: "memory-swap", Usage: "set the memory swap limit for the container(32M)"},
 	cli.StringFlag{Name: "mnt", Value: "", Usage: "mount namespace"},
 	cli.StringFlag{Name: "mount-label", Usage: "set the mount label"},
 	cli.StringFlag{Name: "net", Value: "", Usage: "network namespace"},
@@ -51,9 +51,7 @@ var createFlags = []cli.Flag{
 var configCommand = cli.Command{
 	Name:  "config",
 	Usage: "generate a standard configuration file for a container",
-	Flags: append([]cli.Flag{
-		cli.StringFlag{Name: "file,f", Value: "stdout", Usage: "write the configuration to the specified file"},
-	}, createFlags...),
+	Flags: createFlags,
 	Action: func(context *cli.Context) {
 		template := getTemplate()
 		modify(template, context)
@@ -61,20 +59,7 @@ var configCommand = cli.Command{
 		if err != nil {
 			fatal(err)
 		}
-		var f *os.File
-		filePath := context.String("file")
-		switch filePath {
-		case "stdout", "":
-			f = os.Stdout
-		default:
-			if f, err = os.Create(filePath); err != nil {
-				fatal(err)
-			}
-			defer f.Close()
-		}
-		if _, err := io.Copy(f, bytes.NewBuffer(data)); err != nil {
-			fatal(err)
-		}
+		fmt.Printf("%s", data)
 	},
 }
 
@@ -84,8 +69,21 @@ func modify(config *configs.Config, context *cli.Context) {
 	config.Cgroups.CpusetCpus = context.String("cpuset-cpus")
 	config.Cgroups.CpusetMems = context.String("cpuset-mems")
 	config.Cgroups.CpuShares = int64(context.Int("cpushares"))
-	config.Cgroups.Memory = int64(context.Int("memory-limit"))
-	config.Cgroups.MemorySwap = int64(context.Int("memory-swap"))
+	if rawMem := context.String("memory-limit"); rawMem != "" {
+		memory, err := units.FromHumanSize(rawMem)
+		if err != nil {
+			logrus.Fatalf("invalid memory-limit %s", rawMem)
+		}
+		config.Cgroups.Memory = memory
+	}
+	config.Cgroups.MemorySwap = -1
+	if rawSwap := context.String("memory-swap"); rawSwap != "" {
+		swap, err := units.FromHumanSize(rawSwap)
+		if err != nil {
+			logrus.Fatalf("invalid memory-swap %s", rawSwap)
+		}
+		config.Cgroups.MemorySwap = swap
+	}
 	config.AppArmorProfile = context.String("apparmor-profile")
 	config.ProcessLabel = context.String("process-label")
 	config.MountLabel = context.String("mount-label")
