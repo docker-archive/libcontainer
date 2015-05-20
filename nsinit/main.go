@@ -17,7 +17,9 @@ child of the process supervisor.  nsinit can be used to manage the lifetime of a
 
 Execute a simple container in your shell by running: 
 
-    nsinit exec --tty bash
+    nsinit exec --tty sh
+
+Made with ♥ by docker
 `
 )
 
@@ -32,7 +34,12 @@ func main() {
 	app.Name = "nsinit"
 	app.Usage = usage
 	app.Version = version
-	app.Author = "with ♥ by docker"
+	app.Authors = []cli.Author{
+		{
+			Name:  "@crosbymichael",
+			Email: "michael@docker.com",
+		},
+	}
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{Name: "debug", Usage: "enable debug output for logging"},
 		cli.StringFlag{Name: "criu", Value: "criu", Usage: "path to the criu binary for checkpoint and restore"},

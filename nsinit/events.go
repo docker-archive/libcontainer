@@ -13,6 +13,7 @@ import (
 // event struct for encoding the event data to json.
 type event struct {
 	Type string      `json:"type"`
+	ID   string      `json:"id"`
 	Data interface{} `json:"data,omitempty"`
 }
 
@@ -61,12 +62,12 @@ var eventsCommand = cli.Command{
 					// this means an oom event was received, if it is !ok then
 					// the channel was closed because the container stopped and
 					// the cgroups no longer exist.
-					events <- &event{Type: "oom"}
+					events <- &event{Type: "oom", ID: container.ID()}
 				} else {
 					n = nil
 				}
 			case s := <-stats:
-				events <- &event{Type: "stats", Data: s}
+				events <- &event{Type: "stats", ID: container.ID(), Data: s}
 			}
 			if n == nil {
 				return

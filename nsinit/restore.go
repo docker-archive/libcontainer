@@ -1,21 +1,18 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
-	"syscall"
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
-	"github.com/docker/libcontainer/utils"
+	"github.com/docker/libcontainer/configs"
 )
 
 var restoreCommand = cli.Command{
 	Name:  "restore",
 	Usage: "restore a container from a previous checkpoint",
 	Flags: []cli.Flag{
-		cli.StringFlag{Name: "id", Value: "nsinit", Usage: "specify the ID for a container"},
+		idFlag,
 		cli.StringFlag{Name: "image-path", Value: "", Usage: "path to criu image files for restoring"},
 		cli.StringFlag{Name: "work-path", Value: "", Usage: "path for saving work files and logs"},
 		cli.BoolFlag{Name: "tcp-established", Usage: "allow open tcp connections"},
@@ -25,84 +22,48 @@ var restoreCommand = cli.Command{
 	Action: func(context *cli.Context) {
 		imagePath := context.String("image-path")
 		if imagePath == "" {
-			fatal(fmt.Errorf("The --image-path option isn't specified"))
-		}
-		var (
-			container libcontainer.Container
-			err       error
-		)
-		factory, err := loadFactory(context)
-		if err != nil {
-			fatal(err)
+			imagePath = getDefaultImagePath(context)
 		}
 		config, err := loadConfig(context)
 		if err != nil {
 			fatal(err)
 		}
-		created := false
-		container, err = factory.Load(context.String("id"))
-		if err != nil {
-			created = true
-			if container, err = factory.Create(context.String("id"), config); err != nil {
-				fatal(err)
-			}
-		}
-		process := &libcontainer.Process{
-			Stdin:  os.Stdin,
-			Stdout: os.Stdout,
-			Stderr: os.Stderr,
-		}
-		//rootuid, err := config.HostUID()
-		//if err != nil {
-		//fatal(err)
-		//}
-		rootuid := 0 // XXX
-		tty, err := newTty(context, process, rootuid)
+		status, err := restoreContainer(context, config, imagePath)
 		if err != nil {
 			fatal(err)
 		}
-		go handleSignals(process, tty)
-		err = container.Restore(process, &libcontainer.CriuOpts{
-			ImagesDirectory:         imagePath,
-			WorkDirectory:           context.String("work-path"),
-			TcpEstablished:          context.Bool("tcp-established"),
-			ExternalUnixConnections: context.Bool("ext-unix-sk"),
-			ShellJob:                context.Bool("shell-job"),
-		})
-		if err != nil {
-			tty.Close()
-			if created {
-				container.Destroy()
-			}
-			fatal(err)
-		}
-		status, err := process.Wait()
-		if err != nil {
-			exitError, ok := err.(*exec.ExitError)
-			if ok {
-				status = exitError.ProcessState
-			} else {
-				tty.Close()
-				if created {
-					container.Destroy()
-				}
-				fatal(err)
-			}
-		}
-		if created {
-			status, err := container.Status()
-			if err != nil {
-				tty.Close()
-				fatal(err)
-			}
-			if status != libcontainer.Checkpointed {
-				if err := container.Destroy(); err != nil {
-					tty.Close()
-					fatal(err)
-				}
-			}
-		}
-		tty.Close()
-		os.Exit(utils.ExitStatus(status.Sys().(syscall.WaitStatus)))
+		os.Exit(status)
 	},
+}
+
+func restoreContainer(context *cli.Context, config *configs.Config, imagePath string) (int, error) {
+	//rootuid, err := config.HostUID()
+	//if err != nil {
+	//fatal(err)
+	//}
+	rootuid := 0 // XXX
+	container, created, err := getOrCreateContainer(context, config)
+	if err != nil {
+		return -1, err
+	}
+	defer destoryMaybe(container, created)
+	process := &libcontainer.Process{
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+	}
+	tty, err := newTty(context, process, rootuid)
+	if err != nil {
+		return -1, err
+	}
+	handler := newSignalHandler(tty)
+	defer handler.Close()
+	err = container.Restore(process, &libcontainer.CriuOpts{
+		ImagesDirectory:         imagePath,
+		WorkDirectory:           context.String("work-path"),
+		TcpEstablished:          context.Bool("tcp-established"),
+		ExternalUnixConnections: context.Bool("ext-unix-sk"),
+		ShellJob:                context.Bool("shell-job"),
+	})
+	return handler.process(process)
 }

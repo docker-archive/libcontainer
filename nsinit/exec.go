@@ -2,14 +2,11 @@ package main
 
 import (
 	"os"
-	"os/exec"
-	"syscall"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/configs"
-	"github.com/docker/libcontainer/utils"
 )
 
 var execCommand = cli.Command{
@@ -35,57 +32,6 @@ var execCommand = cli.Command{
 	},
 }
 
-func execContainer(context *cli.Context, config *configs.Config) (int, error) {
-	rootuid, err := config.HostUID()
-	if err != nil {
-		return -1, err
-	}
-	factory, err := loadFactory(context)
-	if err != nil {
-		return -1, err
-	}
-	created := false
-	container, err := factory.Load(context.String("id"))
-	if err != nil {
-		created = true
-		if container, err = factory.Create(context.String("id"), config); err != nil {
-			return -1, err
-		}
-	}
-	// ensure that the container is always removed if we were the process
-	// that created it.
-	defer func() {
-		if created {
-			if err := container.Destroy(); err != nil {
-				logrus.Error(err)
-			}
-		}
-	}()
-	process := newProcess(context)
-	tty, err := newTty(context, process, rootuid)
-	if err != nil {
-		return -1, err
-	}
-	defer tty.Close()
-	go handleSignals(process, tty)
-	return runProcess(container, process)
-}
-
-func runProcess(container libcontainer.Container, process *libcontainer.Process) (int, error) {
-	if err := container.Start(process); err != nil {
-		return -1, err
-	}
-	status, err := process.Wait()
-	if err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if !ok {
-			return -1, err
-		}
-		status = exitError.ProcessState
-	}
-	return utils.ExitStatus(status.Sys().(syscall.WaitStatus)), nil
-}
-
 func newProcess(context *cli.Context) *libcontainer.Process {
 	return &libcontainer.Process{
 		Args:   context.Args(),
@@ -96,5 +42,57 @@ func newProcess(context *cli.Context) *libcontainer.Process {
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 	}
+}
 
+func getOrCreateContainer(context *cli.Context, config *configs.Config) (libcontainer.Container, bool, error) {
+	factory, err := loadFactory(context)
+	if err != nil {
+		return nil, false, err
+	}
+	created := false
+	container, err := factory.Load(context.String("id"))
+	if err != nil {
+		created = true
+		if container, err = factory.Create(context.String("id"), config); err != nil {
+			return nil, false, err
+		}
+	}
+	return container, created, nil
+}
+
+func destoryMaybe(container libcontainer.Container, created bool) {
+	status, err := container.Status()
+	if err != nil {
+		logrus.Error(err)
+	}
+	if created && status != libcontainer.Checkpointed {
+		if err := container.Destroy(); err != nil {
+			logrus.Error(err)
+		}
+	}
+}
+
+func execContainer(context *cli.Context, config *configs.Config) (int, error) {
+	rootuid, err := config.HostUID()
+	if err != nil {
+		return -1, err
+	}
+	container, created, err := getOrCreateContainer(context, config)
+	if err != nil {
+		return -1, err
+	}
+	// ensure that the container is always removed if we were the process
+	// that created it.
+	defer destoryMaybe(container, created)
+	process := newProcess(context)
+	tty, err := newTty(context, process, rootuid)
+	if err != nil {
+		return -1, err
+	}
+	handler := newSignalHandler(tty)
+	defer handler.Close()
+	if err := container.Start(process); err != nil {
+		return -1, err
+	}
+	return handler.process(process)
 }

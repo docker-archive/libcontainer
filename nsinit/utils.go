@@ -4,14 +4,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/configs"
 )
+
+var container libcontainer.Container
+
+func containerPreload(context *cli.Context) error {
+	c, err := getContainer(context)
+	if err != nil {
+		return err
+	}
+	container = c
+	return nil
+}
+
+var factory libcontainer.Factory
+
+func factoryPreload(context *cli.Context) error {
+	f, err := loadFactory(context)
+	if err != nil {
+		return err
+	}
+	factory = f
+	return nil
+}
 
 // loadConfig loads the specified config file from the path or creates
 // a new config from the default template and populates it with runtime
@@ -90,19 +110,6 @@ func getDefaultID() string {
 	return filepath.Base(cwd)
 }
 
-// handleSignals forwards signals from the current process to the container
-// while still allowing any configured TTY to have SIGWINCH signals interpreted
-// as resize events.
-func handleSignals(container *libcontainer.Process, tty *tty) {
-	sigc := make(chan os.Signal, 10)
-	signal.Notify(sigc)
-	tty.resize()
-	for sig := range sigc {
-		switch sig {
-		case syscall.SIGWINCH:
-			tty.resize()
-		default:
-			container.Signal(sig)
-		}
-	}
+func getDefaultImagePath(context *cli.Context) string {
+	return filepath.Join("/tmp/nsinit/checkpoints", context.String("id"))
 }

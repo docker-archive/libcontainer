@@ -14,10 +14,7 @@ var initCommand = cli.Command{
 	Action: func(context *cli.Context) {
 		runtime.GOMAXPROCS(1)
 		runtime.LockOSThread()
-		factory, err := libcontainer.New("")
-		if err != nil {
-			fatal(err)
-		}
+		factory, _ := libcontainer.New("")
 		if err := factory.StartInitialization(); err != nil {
 			fatal(err)
 		}

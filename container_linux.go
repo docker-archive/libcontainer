@@ -296,41 +296,33 @@ const descriptors_filename = "descriptors.json"
 func (c *linuxContainer) Checkpoint(criuOpts *CriuOpts) error {
 	c.m.Lock()
 	defer c.m.Unlock()
-
 	if err := c.checkCriuVersion(); err != nil {
 		return err
 	}
-
 	if criuOpts.ImagesDirectory == "" {
 		criuOpts.ImagesDirectory = filepath.Join(c.root, "criu.image")
 	}
-
 	// Since a container can be C/R'ed multiple times,
 	// the checkpoint directory may already exist.
-	if err := os.Mkdir(criuOpts.ImagesDirectory, 0755); err != nil && !os.IsExist(err) {
+	if err := os.MkdirAll(criuOpts.ImagesDirectory, 0755); err != nil && !os.IsExist(err) {
 		return err
 	}
-
 	if criuOpts.WorkDirectory == "" {
 		criuOpts.WorkDirectory = filepath.Join(c.root, "criu.work")
 	}
-
-	if err := os.Mkdir(criuOpts.WorkDirectory, 0755); err != nil && !os.IsExist(err) {
+	if err := os.MkdirAll(criuOpts.WorkDirectory, 0755); err != nil && !os.IsExist(err) {
 		return err
 	}
-
 	workDir, err := os.Open(criuOpts.WorkDirectory)
 	if err != nil {
 		return err
 	}
 	defer workDir.Close()
-
 	imageDir, err := os.Open(criuOpts.ImagesDirectory)
 	if err != nil {
 		return err
 	}
 	defer imageDir.Close()
-
 	rpcOpts := criurpc.CriuOpts{
 		ImagesDirFd:    proto.Int32(int32(imageDir.Fd())),
 		WorkDirFd:      proto.Int32(int32(workDir.Fd())),
@@ -345,7 +337,6 @@ func (c *linuxContainer) Checkpoint(criuOpts *CriuOpts) error {
 		TcpEstablished: proto.Bool(criuOpts.TcpEstablished),
 		ExtUnixSk:      proto.Bool(criuOpts.ExternalUnixConnections),
 	}
-
 	// append optional criu opts, e.g., page-server and port
 	if criuOpts.PageServer.Address != "" && criuOpts.PageServer.Port != 0 {
 		rpcOpts.Ps = &criurpc.CriuPageServerInfo{
@@ -353,13 +344,11 @@ func (c *linuxContainer) Checkpoint(criuOpts *CriuOpts) error {
 			Port:    proto.Int32(criuOpts.PageServer.Port),
 		}
 	}
-
 	t := criurpc.CriuReqType_DUMP
 	req := criurpc.CriuReq{
 		Type: &t,
 		Opts: &rpcOpts,
 	}
-
 	for _, m := range c.config.Mounts {
 		if m.Device == "bind" {
 			mountDest := m.Destination
@@ -373,43 +362,31 @@ func (c *linuxContainer) Checkpoint(criuOpts *CriuOpts) error {
 			req.Opts.ExtMnt = append(req.Opts.ExtMnt, extMnt)
 		}
 	}
-
 	// Write the FD info to a file in the image directory
-
 	fdsJSON, err := json.Marshal(c.initProcess.externalDescriptors())
 	if err != nil {
 		return err
 	}
-
-	err = ioutil.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptors_filename), fdsJSON, 0655)
-	if err != nil {
+	if err := ioutil.WriteFile(filepath.Join(criuOpts.ImagesDirectory, descriptors_filename), fdsJSON, 0655); err != nil {
 		return err
 	}
-
-	err = c.criuSwrk(nil, &req, criuOpts)
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.criuSwrk(nil, &req, criuOpts)
 }
 
 func (c *linuxContainer) Restore(process *Process, criuOpts *CriuOpts) error {
 	c.m.Lock()
 	defer c.m.Unlock()
-
 	if err := c.checkCriuVersion(); err != nil {
 		return err
 	}
-
 	if criuOpts.WorkDirectory == "" {
 		criuOpts.WorkDirectory = filepath.Join(c.root, "criu.work")
 	}
 	// Since a container can be C/R'ed multiple times,
 	// the work directory may already exist.
-	if err := os.Mkdir(criuOpts.WorkDirectory, 0655); err != nil && !os.IsExist(err) {
+	if err := os.MkdirAll(criuOpts.WorkDirectory, 0655); err != nil && !os.IsExist(err) {
 		return err
 	}
-
 	workDir, err := os.Open(criuOpts.WorkDirectory)
 	if err != nil {
 		return err
@@ -435,18 +412,15 @@ func (c *linuxContainer) Restore(process *Process, criuOpts *CriuOpts) error {
 		return err
 	}
 	defer os.Remove(root)
-
 	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
 		return err
 	}
-
 	err = syscall.Mount(c.config.Rootfs, root, "", syscall.MS_BIND|syscall.MS_REC, "")
 	if err != nil {
 		return err
 	}
 	defer syscall.Unmount(root, syscall.MNT_DETACH)
-
 	t := criurpc.CriuReqType_RESTORE
 	req := criurpc.CriuReq{
 		Type: &t,
@@ -490,20 +464,16 @@ func (c *linuxContainer) Restore(process *Process, criuOpts *CriuOpts) error {
 			break
 		}
 	}
-
 	var (
 		fds    []string
 		fdJSON []byte
 	)
-
 	if fdJSON, err = ioutil.ReadFile(filepath.Join(criuOpts.ImagesDirectory, descriptors_filename)); err != nil {
 		return err
 	}
-
-	if err = json.Unmarshal(fdJSON, &fds); err != nil {
+	if err := json.Unmarshal(fdJSON, &fds); err != nil {
 		return err
 	}
-
 	for i := range fds {
 		if s := fds[i]; strings.Contains(s, "pipe:") {
 			inheritFd := new(criurpc.InheritFd)
@@ -512,12 +482,7 @@ func (c *linuxContainer) Restore(process *Process, criuOpts *CriuOpts) error {
 			req.Opts.InheritFd = append(req.Opts.InheritFd, inheritFd)
 		}
 	}
-
-	err = c.criuSwrk(process, &req, criuOpts)
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.criuSwrk(process, &req, criuOpts)
 }
 
 func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *CriuOpts) error {
@@ -525,12 +490,10 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 	if err != nil {
 		return err
 	}
-
 	criuClient := os.NewFile(uintptr(fds[0]), "criu-transport-client")
 	criuServer := os.NewFile(uintptr(fds[1]), "criu-transport-server")
 	defer criuClient.Close()
 	defer criuServer.Close()
-
 	args := []string{"swrk", "3"}
 	cmd := exec.Command(c.criuPath, args...)
 	if process != nil {
@@ -552,7 +515,6 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 			return
 		}
 	}()
-
 	var extFds []string
 	if process != nil {
 		extFds, err = getPipeFds(cmd.Process.Pid)
@@ -560,7 +522,6 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 			return err
 		}
 	}
-
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return err
@@ -569,7 +530,6 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 	if err != nil {
 		return err
 	}
-
 	buf := make([]byte, 10*4096)
 	for true {
 		n, err := criuClient.Read(buf)
@@ -582,7 +542,6 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 		if n == len(buf) {
 			return fmt.Errorf("buffer is too small")
 		}
-
 		resp := new(criurpc.CriuResp)
 		err = proto.Unmarshal(buf[:n], resp)
 		if err != nil {
@@ -591,7 +550,6 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 		if !resp.GetSuccess() {
 			return fmt.Errorf("criu failed: type %s errno %d", req.GetType().String(), resp.GetCrErrno())
 		}
-
 		t := resp.GetType()
 		switch {
 		case t == criurpc.CriuReqType_NOTIFY:
@@ -618,10 +576,8 @@ func (c *linuxContainer) criuSwrk(process *Process, req *criurpc.CriuReq, opts *
 		default:
 			return fmt.Errorf("unable to parse the response %s", resp.String())
 		}
-
 		break
 	}
-
 	// cmd.Wait() waits cmd.goroutines which are used for proxying file descriptors.
 	// Here we want to wait only the CRIU process.
 	st, err := cmd.Process.Wait()
