@@ -1,0 +1,3 @@
+[submodule ".shipped/libnl"]
+	path = .shipped/libnl
+	url = git://github.com/tgraf/libnl.git

@@ -12,6 +12,14 @@ import (
 )
 
 func TestExecIn(t *testing.T) {
+	testExecIn(t, false)
+}
+
+func TestExecInLoad(t *testing.T) {
+	testExecIn(t, true)
+}
+
+func testExecIn(t *testing.T, load bool) {
 	if testing.Short() {
 		return
 	}
@@ -36,6 +44,12 @@ func TestExecIn(t *testing.T) {
 	defer stdinW.Close()
 	ok(t, err)
 
+	container2 := container
+	if load {
+		container2, err = factory.Load("testCT")
+		ok(t, err)
+	}
+
 	buffers := newStdBuffers()
 	ps := &libcontainer.Process{
 		Args:   []string{"ps"},
@@ -44,7 +58,7 @@ func TestExecIn(t *testing.T) {
 		Stdout: buffers.Stdout,
 		Stderr: buffers.Stderr,
 	}
-	err = container.Start(ps)
+	err = container2.Start(ps)
 	ok(t, err)
 	_, err = ps.Wait()
 	ok(t, err)
@@ -142,7 +156,7 @@ func TestExecInError(t *testing.T) {
 	if err == nil {
 		t.Fatal("Should be an error")
 	}
-	if !strings.Contains(err.Error(), "executable file not found") {
+	if factory.Type() == "libcontainer" && !strings.Contains(err.Error(), "executable file not found") {
 		t.Fatalf("Should be error about not found executable, got %s", err)
 	}
 }

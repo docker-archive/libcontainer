@@ -31,15 +31,24 @@ func loadConfig(context *cli.Context) (*configs.Config, error) {
 }
 
 func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
-	cgm := libcontainer.Cgroupfs
-	if context.Bool("systemd") {
-		if systemd.UseSystemd() {
-			cgm = libcontainer.SystemdCgroups
-		} else {
-			logrus.Warn("systemd cgroup flag passed, but systemd support for managing cgroups is not available.")
-		}
+	factory := context.GlobalString("factory")
+
+	if factory == "libct" {
+		return libcontainer.NewLibctFactory(context.GlobalString("root"), context.Bool("systemd"))
 	}
-	return libcontainer.New(context.GlobalString("root"), cgm)
+	if factory == "linux" {
+		cgm := libcontainer.Cgroupfs
+		if context.Bool("systemd") {
+			if systemd.UseSystemd() {
+				cgm = libcontainer.SystemdCgroups
+			} else {
+				logrus.Warn("systemd cgroup flag passed, but systemd support for managing cgroups is not available.")
+			}
+		}
+		return libcontainer.New(context.GlobalString("root"), cgm)
+	}
+
+	return nil, fmt.Errorf("Unknown factory: %s", factory)
 }
 
 func getContainer(context *cli.Context) (libcontainer.Container, error) {

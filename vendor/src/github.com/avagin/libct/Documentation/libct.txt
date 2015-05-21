@@ -1,0 +1,229 @@
+libct(1)
+========
+:doctype:       manpage
+:man source:    libct
+:man version:   0.0.1
+:man manual:    libct manual
+
+NAME
+----
+
+libct - a containers management library
+
+
+DESCRIPTION
+-----------
+
+*libct* is a containers management library which provides convenient api for
+frontend programs (lets refer to this term as a simple _frontend_ word) to
+rule a container during its whole lifetime.
+
+
+TERMINOLOGY
+-----------
+
+session
+~~~~~~~
+
+A top level primitive used by *libct*. Every session may carry a set of
+containers which are managed by backend operations.
+
+container handler
+~~~~~~~~~~~~~~~~~
+
+A container inside a session. Container handlers are unique inside session,
+which allows *libct* to distinguish every container from each other. Container
+handlers are provided back to a fronted upon a conainer creation (posterior calls
+to *libtc* service functions usually require a conteinter handler to be passed
+as an argument).
+
+backend operations
+~~~~~~~~~~~~~~~~~~
+
+Low level operations associated with a session. Currently there is only one
+type of backends is supported: _local_. This backend operates locally over cgroups
+and namespaces interfaces.
+
+
+SESSION MANAGEMENT
+------------------
+
+libct_session_t *libct_session_open*(char *'url')::
+	Opens a session by its uniform resource locator passed in 'url' argument.
+	'url' may be only "local" and this moment. If 'url' is NULL then it is
+	treated as "local".
+
+libct_session_t *libct_session_open_local*(void)::
+	Same as *libct_session_open*("local").
+
+void *libct_session_close*(libct_session_t 's')::
+	Closes the session 's'. If the session is local one then all containers in
+	the session will be destroyed.
+
+In case of success these functions return a pointer to a session instance or NULL
+if an error occured.
+
+
+BASIC CONTAINER MANAGEMENT
+--------------------------
+
+ct_handler_t *libct_container_create*(libct_session_t 'ses', char *'name')::
+	Creates a container with name 'name' in the session 'ses'. Returns
+	NULL if error occured.
+
+ct_handler_t *libct_container_open*(libct_session_t 'ses', char *'name')::
+	Opens a container previously created with name 'name' in the session
+	'ses' and returns its handler. Returns NULL if error occured.
+
+enum ct_state *libct_container_state*(ct_handler_t 'ct')::
+	Returns current state of the container 'ct': *CT_ERROR*, *CT_STOPPED* or *CT_RUNNING*.
+
+int *libct_container_spawn_cb*(ct_handler_t 'ct', int (*'ct_fn')(void *), void *'arg')::
+	Starts the container 'ct' and executes callback function 'ct_fn' inside the
+	container passing 'arg' to 'ct_fn' as the argument. Returns 0 on success, otherwise -1.
+
+int *libct_container_spawn_execv*(ct_handler_t 'ct', char *'path', char **'argv')::
+	Same as *libct_container_spawn_cb* except it executes a program pointed by 'path'.
+	'argv' is a pointer to arguments array which will be transfered to a program.
+
+int *libct_container_spawn_execve*(ct_handler_t 'ct', char *'path', char **'argv', char **'env')::
+	Same as *libct_container_spawn_execv* but also passess a pointer to environment 'env'.
+
+int *libct_container_spawn_execvefds*(ct_handler_t 'ct', char *'path', char **'argv', char **'env')::
+	Same as *libct_container_spawn_execve* but also passess a pointer to file
+	descriptor array for standard streams (stdin, stdout, stderr).
+
+int *libct_container_enter_cb*(ct_handler_t 'ct', int (*'ct_fn')(void *), void *'arg')::
+	Enters the container 'ct' and executes the callback function 'ct_fn' with
+	the argument pointer 'arg' inside it. Returns pid of the process executing
+	callback inside the container, otherwise -1.
+
+int *libct_container_enter_execv*(ct_handler_t 'ct', char *'path', char **'argv')::
+	Same as *libct_container_enter_cb* except it executes the program pointed by 'path'.
+	'argv' is a pointer to arguments array which will be transfered to the program.
+
+int *libct_container_enter_execve*(ct_handler_t 'ct', char *'path', char **'argv', char **'env')::
+	Same as *libct_container_enter_execv* but also passess a pointer to environment 'env'.
+
+int *libct_container_kill*(ct_handler_t 'ct')::
+	Kills the container 'ct'. The container must be in the running state.
+	Returns 0 on success, otherwise -1.
+
+int *libct_container_wait*(ct_handler_t 'ct')::
+	Waits the container 'ct' to stop. The container must be in the running state.
+	Returns 0 on success, otherwise -1.
+
+void *libct_container_destroy*(ct_handler_t 'ct')::
+	Destroys the container 'ct'.
+
+
+NAMESPACES AND CGROUPS MANAGEMENT
+---------------------------------
+
+int *libct_container_set_nsmask*(ct_handler_t 'ct', unsigned long 'ns_mask')::
+	Sets the namespace mask 'ns_mask' to the container 'ct'. The container
+	must be in the stopped state. Returns 0 on success, otherwise -1.
+
+int *libct_controller_add*(ct_handler_t 'ct', enum ct_controller 'ctype')::
+	Adds the controller 'ctype' into the container 'ct'. The controller
+	may be one of: *CTL_BLKIO*, *CTL_CPU*, *CTL_CPUACCT*, *CTL_CPUSET*, *CTL_DEVICES*,
+	*CTL_FREEZER*, *CTL_HUGETLB*, *CTL_MEMORY*, *CTL_NETCLS*. The container
+	must be in the stopped state. Returns 0 on success, otherwise -1.
+
+int *libct_controller_configure*(ct_handler_t 'ct', enum ct_controller 'ctype', char *'param', char *'value')::
+	Configures the controller 'ctype' of the container 'ct', whith parameter
+	'param' and 'value' value. The container must be in any state. If it's
+	stopped, the configured parameters will be applied on container start.
+	Returns 0 on success, otherwise -1.
+
+
+FILESYSTEMS
+-----------
+
+int *libct_fs_set_root*(ct_handler_t 'ct', char *'root_path')::
+	Sets root directory 'root_path' for the container 'ct'. The container must
+	be in the stopped state. Returns 0 on success, otherwise -1.
+
+int *libct_fs_set_private*(ct_handler_t 'ct', enum ct_fs_type 'type', void *'arg')::
+	Sets private directory for the container 'ct'. 'type' may be one of the following:
+	*CT_FS_NONE* -- when frontend wants to configure private directory by self or
+	when all private data is alredy in the root directory,*CT_FS_SUBDIR* -- when
+	frontend prefers the directory path pointed by 'arg' would be mounted as a
+	private by *libct* upon the container start. The container must be in the stopped 
+	state. Returns 0 on success, otherwise -1.
+
+int *libct_fs_add_mount*(ct_handler_t 'ct', char *'source', char *'destination', int 'flags')::
+	Sets external bind mount points for the container 'ct' upon its startup. 'source',
+	'destination', 'flags' are source, destination directories and flags for mounting
+	as appropriate. The 'source' path is relative to the caller's root, the 'destination'
+	path is relative to the container's root. The container must be in the stopped state.
+	Returns 0 on success, otherwise -1.
+
+
+NETWORKING
+----------
+
+int *libct_net_add*(ct_handler_t 'ct', enum ct_net_type 'ntype', void *'arg')::
+	Adds network support for the container 'ct'. 'ntype' may be one of: *CT_NET_NONE* --
+	no configured networking needed, *CT_NET_HOSTNIC* -- to use host networking,
+	*CT_NET_VETH* -- to use virtual ethernet pair. The container must be in the
+	stopped state. Returns 0 on success, otherwise -1.
+
+
+CONTAINER OPTIONS
+-----------------
+
+int *libct_container_set_option*(ct_handler_t 'ct', int 'opt', ...)::
+	Sets option 'opt' for the container 'ct'. Options can be
+	
+	*LIBCT_OPT_AUTO_PROC_MOUNT*:: automatically mount procfs upon the container
+	startup if the container lives in its own pid namespace.
+
+	*LIBCT_OPT_CGROUP_SUBMOUNT*:: bind mount container's controllers into it's
+	file tree so that it will be able to create sub-cgroups. Argument is the
+	path where to mount, or NULL (in this case "/sys/fs/cgroup" will be used).
+
+
+EXAMPLE
+-------
+
+Here is trivial example of creating a container with name "test". Note we ignore any possible
+errors for simplicity sake.
+
+[source,c]
+--------------------
+#include <stdio.h>
+#include <sys/mman.h>
+
+#include <libct.h>
+
+static int set_ct_alive(void *a)
+{
+	*(int *)a = 1;
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	int *ct_alive;
+	libct_session_t s;
+	ct_handler_t ct;
+
+	ct_alive = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+			MAP_SHARED | MAP_ANON, 0, 0);
+	*ct_alive = 0;
+
+	s = libct_session_open_local();
+	ct = libct_container_create(s, "test");
+	libct_container_spawn_cb(ct, set_ct_alive, ct_alive);
+	libct_container_wait(ct);
+	libct_container_destroy(ct);
+	libct_session_close(s);
+
+	if (!*ct_alive)
+		printf("Container is not alive");
+	else
+		printf("Container is alive");
+	return 0;
+}
+--------------------

@@ -18,7 +18,7 @@ var (
 
 // Saturates negative values at zero and returns a uint64.
 // Due to kernel bugs, some of the memory cgroup stats can be negative.
-func parseUint(s string, base, bitSize int) (uint64, error) {
+func ParseUint(s string, base, bitSize int) (uint64, error) {
 	value, err := strconv.ParseUint(s, base, bitSize)
 	if err != nil {
 		intValue, intErr := strconv.ParseInt(s, base, bitSize)
@@ -38,11 +38,11 @@ func parseUint(s string, base, bitSize int) (uint64, error) {
 
 // Parses a cgroup param and returns as name, value
 //  i.e. "io_service_bytes 1234" will return as io_service_bytes, 1234
-func getCgroupParamKeyValue(t string) (string, uint64, error) {
+func GetCgroupParamKeyValue(t string) (string, uint64, error) {
 	parts := strings.Fields(t)
 	switch len(parts) {
 	case 2:
-		value, err := parseUint(parts[1], 10, 64)
+		value, err := ParseUint(parts[1], 10, 64)
 		if err != nil {
 			return "", 0, fmt.Errorf("Unable to convert param value (%q) to uint64: %v", parts[1], err)
 		}
@@ -60,7 +60,7 @@ func getCgroupParamUint(cgroupPath, cgroupFile string) (uint64, error) {
 		return 0, err
 	}
 
-	return parseUint(strings.TrimSpace(string(contents)), 10, 64)
+	return ParseUint(strings.TrimSpace(string(contents)), 10, 64)
 }
 
 // Gets a string value from the specified cgroup file

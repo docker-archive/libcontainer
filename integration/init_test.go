@@ -31,6 +31,7 @@ func init() {
 var (
 	factory        libcontainer.Factory
 	systemdFactory libcontainer.Factory
+	libct          bool = false
 )
 
 func TestMain(m *testing.M) {
@@ -56,5 +57,6 @@ func TestMain(m *testing.M) {
 	}
 
 	ret = m.Run()
+	ret |= libctRun(m)
 	os.Exit(ret)
 }
