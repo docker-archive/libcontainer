@@ -2,10 +2,13 @@ package main
 
 import (
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
 	"github.com/docker/libcontainer/configs"
+	"github.com/docker/libcontainer/utils"
 )
 
 var restoreCommand = cli.Command{
@@ -56,8 +59,8 @@ func restoreContainer(context *cli.Context, config *configs.Config, imagePath st
 	if err != nil {
 		return -1, err
 	}
-	handler := newSignalHandler(tty)
-	defer handler.Close()
+	defer tty.Close()
+	go handleSignals(process, tty)
 	err = container.Restore(process, &libcontainer.CriuOpts{
 		ImagesDirectory:         imagePath,
 		WorkDirectory:           context.String("work-path"),
@@ -65,5 +68,23 @@ func restoreContainer(context *cli.Context, config *configs.Config, imagePath st
 		ExternalUnixConnections: context.Bool("ext-unix-sk"),
 		ShellJob:                context.Bool("shell-job"),
 	})
-	return handler.process(process)
+	status, err := process.Wait()
+	if err != nil {
+		return -1, err
+	}
+	return utils.ExitStatus(status.Sys().(syscall.WaitStatus)), nil
+}
+
+func handleSignals(process *libcontainer.Process, tty *tty) {
+	sigc := make(chan os.Signal, 10)
+	signal.Notify(sigc)
+	tty.resize()
+	for sig := range sigc {
+		switch sig {
+		case syscall.SIGWINCH:
+			tty.resize()
+		default:
+			process.Signal(sig)
+		}
+	}
 }
