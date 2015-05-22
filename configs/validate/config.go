@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/docker/libcontainer/configs"
 )
@@ -33,6 +34,9 @@ func (v *ConfigValidator) Validate(config *configs.Config) error {
 		return err
 	}
 	if err := v.usernamespace(config); err != nil {
+		return err
+	}
+	if err := v.procMount(config); err != nil {
 		return err
 	}
 	return nil
@@ -90,4 +94,17 @@ func (v *ConfigValidator) usernamespace(config *configs.Config) error {
 		}
 	}
 	return nil
+}
+
+func (v *ConfigValidator) procMount(config *configs.Config) error {
+	if !config.Namespaces.Contains(configs.NEWNS) {
+		return nil
+	}
+
+	for _, m := range config.Mounts {
+		if (strings.Trim(m.Source, " ") == "proc") && (strings.Trim(strings.Trim(m.Destination, " "), "/") == "proc") {
+			return nil
+		}
+	}
+	return fmt.Errorf("NEWNS namespace specified, but porc munt isn't enabled in the config")
 }
