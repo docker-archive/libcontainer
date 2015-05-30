@@ -14,7 +14,7 @@ type IDMap struct {
 }
 
 type SeccompConf struct {
-	SysCalls []int `json:"syscalls"`
+	SysCalls []string `json:"syscalls"`
 }
 
 // TODO Windows. Many of these fields should be factored out into those parts

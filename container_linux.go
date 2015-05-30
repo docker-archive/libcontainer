@@ -174,7 +174,7 @@ func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, parentPipe, c
 		c.config.Namespaces.Remove(configs.NEWSECCOMP)
 		cloneFlags = c.config.Namespaces.CloneFlags()
 	} else {
-		c.config.Seccomps.SysCalls = []int{}
+		c.config.Seccomps.SysCalls = []string{}
 	}
 	cmd.Env = append(cmd.Env, t)
 	cmd.SysProcAttr.Cloneflags = cloneFlags

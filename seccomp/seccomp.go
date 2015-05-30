@@ -119,10 +119,6 @@ var secData seccompData = seccompData{0, 0, 0, [6]uint64{0, 0, 0, 0, 0, 0}}
 var hiArg argOFunc
 var loArg argOFunc
 var arg argFunc
-var jEq jFunc
-var jNe jFunc
-var jGe jFunc
-var jLe jFunc
 var secAdd addFunc = nil
 
 var op [4]jFunc
@@ -327,14 +323,6 @@ func CombineArgs(args1 []FilterArgs, args2 []FilterArgs) []FilterArgs {
 	return args1
 }
 
-func Sys(call string) int {
-	number, exists := syscallMap[call]
-	if exists {
-		return number
-	}
-	return -1
-}
-
 func ScmpInit(action int) (*ScmpCtx, error) {
 	ctx := ScmpCtx{
 		CallMap: make(map[int]*Action),
@@ -360,11 +348,11 @@ func ScmpDel(ctx *ScmpCtx, call int) error {
 	return errors.New("syscall not exist")
 }
 
-func ScmpAdd(ctx *ScmpCtx, call int, action int, args ...FilterArgs) error {
-	if call < 0 {
-		return errors.New("syscall error, call < 0")
+func ScmpAdd(ctx *ScmpCtx, scall string, action int, args ...FilterArgs) error {
+	call, exists := syscallMap[scall]
+	if !exists {
+		return errors.New("syscall not surport")
 	}
-
 	if call <= sysCallMax {
 		_, exists := ctx.CallMap[call]
 		if exists {
@@ -497,21 +485,17 @@ func init() {
 	var length int
 	if 8 == int(unsafe.Sizeof(length)) {
 		arg = arg64
-		jEq = jEq64
-		jNe = jNe64
-		jGe = jGe64
-		jLe = jLe64
+		op[EQ] = jEq64
+		op[NE] = jNe64
+		op[GE] = jGe64
+		op[LE] = jLe64
 	} else {
 		arg = arg32
-		jEq = jEq32
-		jNe = jNe32
-		jGe = jGe32
-		jLe = jLe32
+		op[EQ] = jEq32
+		op[NE] = jNe32
+		op[GE] = jGe32
+		op[LE] = jLe32
 	}
-	op[EQ] = jEq
-	op[NE] = jNe
-	op[GE] = jGe
-	op[LE] = jLe
 	chSignal := make(chan os.Signal)
 	signal.Notify(chSignal, syscall.SIGSYS)
 	go sigSeccomp()

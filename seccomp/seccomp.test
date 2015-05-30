@@ -19,11 +19,11 @@ const (
 func writeOk(args []string) {
 	scmpCtx, _ := sec.ScmpInit(sec.ScmpActAllow)
 
-	sec.ScmpAdd(scmpCtx, sec.Sys("exit"), sec.ScmpActAllow)
-	sec.ScmpAdd(scmpCtx, sec.Sys("exit_group"), sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "exit", sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
 	
 	//the first arg is STDOUT_FILENO, the third arg must be <= BUFLEN
-	sec.ScmpAdd(scmpCtx, sec.Sys("write"), sec.ScmpActAllow,
+	sec.ScmpAdd(scmpCtx, "write", sec.ScmpActAllow,
 		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO}}},
 		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN}}},
 	)
@@ -35,17 +35,17 @@ func writeOk(args []string) {
 func writeErr(args []string) {
 	scmpCtx, _ := sec.ScmpInit(sec.ScmpActAllow)
 
-	sec.ScmpAdd(scmpCtx, sec.Sys("exit"), sec.ScmpActAllow)
-	sec.ScmpAdd(scmpCtx, sec.Sys("exit_group"), sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "exit", sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
 
-	sec.ScmpAdd(scmpCtx, sec.Sys("write"), sec.ScmpActAllow,
+	sec.ScmpAdd(scmpCtx, "write", sec.ScmpActAllow,
 		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO}}},
 		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN}}},
 	)
 
 	sec.ScmpLoad(scmpCtx)
 	
-    // bad system call
+	// bad system call
 	fmt.Printf("99999999\n") 
 }
 
@@ -53,16 +53,16 @@ func socketOk(args []string) {
 	scmpCtx, _ := sec.ScmpInit(sec.ScmpActAllow)
     
 	//for 386, the next line is same as 
-	//sec.ScmpAdd(scmpCtx, sec.Sys("socketcall"), sec.ScmpActAllow,
+	//sec.ScmpAdd(scmpCtx, "socketcall", sec.ScmpActAllow,
 	//	sec.FilterArgs{[]sec.Filter{{0, sec.EQ, 1}}},
 	//)
 	//SYS_SOCKET = 1
-    sec.ScmpAdd(scmpCtx, sec.Sys("socket"), sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "socket", sec.ScmpActAllow)
 	
-	sec.ScmpAdd(scmpCtx, sec.Sys("exit"), sec.ScmpActAllow)
-	sec.ScmpAdd(scmpCtx, sec.Sys("exit_group"), sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "exit", sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
 
-	sec.ScmpAdd(scmpCtx, sec.Sys("write"), sec.ScmpActAllow,
+	sec.ScmpAdd(scmpCtx, "write", sec.ScmpActAllow,
 		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO}}},
 		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN}}},
 	)
@@ -76,8 +76,8 @@ func socketOk(args []string) {
 func socketErr(args []string) {
 	scmpCtx, _ := sec.ScmpInit(sec.ScmpActAllow)
 
-	sec.ScmpAdd(scmpCtx, sec.Sys("exit"), sec.ScmpActAllow)
-	sec.ScmpAdd(scmpCtx, sec.Sys("exit_group"), sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx,"exit", sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
 
 	sec.ScmpLoad(scmpCtx)
 	

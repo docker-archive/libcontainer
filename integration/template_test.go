@@ -116,7 +116,7 @@ func newTemplateConfig(rootfs string) *configs.Config {
 			},
 		},
 		Seccomps: configs.SeccompConf{
-			SysCalls: make([]int, 0, 512),
+			SysCalls: make([]string, 0, 512),
 		},
 	}
 }
