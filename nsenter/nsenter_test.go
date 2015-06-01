@@ -3,6 +3,7 @@ package nsenter
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -13,18 +14,29 @@ type pid struct {
 	Pid int `json:"Pid"`
 }
 
-func TestNsenterAlivePid(t *testing.T) {
+func TestNsenterValidPaths(t *testing.T) {
 	args := []string{"nsenter-exec"}
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("failed to create pipe %v", err)
 	}
 
+	namespaces := []string{
+		// join pid ns of the current process
+		fmt.Sprintf("/proc/%d/ns/pid", os.Getpid()),
+	}
 	cmd := &exec.Cmd{
 		Path:       os.Args[0],
 		Args:       args,
 		ExtraFiles: []*os.File{w},
-		Env:        []string{fmt.Sprintf("_LIBCONTAINER_INITPID=%d", os.Getpid()), "_LIBCONTAINER_INITPIPE=3"},
+		Env: []string{
+			fmt.Sprintf("_LIBCONTAINER_NSPATH=%s", strings.Join(namespaces, ",")),
+			// the process needs to be cloned to join pidns properly
+			"_LIBCONTAINER_DOCLONE=true",
+			"_LIBCONTAINER_INITPIPE=3",
+		},
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -36,6 +48,10 @@ func TestNsenterAlivePid(t *testing.T) {
 	var pid *pid
 
 	if err := decoder.Decode(&pid); err != nil {
+		dir, _ := ioutil.ReadDir(fmt.Sprintf("/proc/%d/ns", os.Getpid()))
+		for _, d := range dir {
+			t.Log(d.Name())
+		}
 		t.Fatalf("%v", err)
 	}
 
@@ -49,36 +65,31 @@ func TestNsenterAlivePid(t *testing.T) {
 	p.Wait()
 }
 
-func TestNsenterInvalidPid(t *testing.T) {
+func TestNsenterInvalidPaths(t *testing.T) {
 	args := []string{"nsenter-exec"}
+	_, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe %v", err)
+	}
 
+	namespaces := []string{
+		// join pid ns of the current process
+		fmt.Sprintf("/proc/%d/ns/pid", -1),
+	}
 	cmd := &exec.Cmd{
-		Path: os.Args[0],
-		Args: args,
-		Env:  []string{"_LIBCONTAINER_INITPID=-1"},
+		Path:       os.Args[0],
+		Args:       args,
+		ExtraFiles: []*os.File{w},
+		Env: []string{
+			// join an invalid namespace
+			fmt.Sprintf("_LIBCONTAINER_NSPATH=%s", strings.Join(namespaces, ",")),
+			// the process needs to be cloned to join pidns properly
+			"_LIBCONTAINER_DOCLONE=true",
+			"_LIBCONTAINER_INITPIPE=3",
+		},
 	}
 
-	err := cmd.Run()
-	if err == nil {
-		t.Fatal("nsenter exits with a zero exit status")
-	}
-}
-
-func TestNsenterDeadPid(t *testing.T) {
-	dead_cmd := exec.Command("true")
-	if err := dead_cmd.Run(); err != nil {
-		t.Fatal(err)
-	}
-	args := []string{"nsenter-exec"}
-
-	cmd := &exec.Cmd{
-		Path: os.Args[0],
-		Args: args,
-		Env:  []string{fmt.Sprintf("_LIBCONTAINER_INITPID=%d", dead_cmd.Process.Pid)},
-	}
-
-	err := cmd.Run()
-	if err == nil {
+	if err := cmd.Run(); err == nil {
 		t.Fatal("nsenter exits with a zero exit status")
 	}
 }

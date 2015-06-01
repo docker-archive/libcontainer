@@ -65,38 +65,30 @@ static int clone_parent(jmp_buf * env)
 
 void nsexec()
 {
-	char *namespaces[] = { "ipc", "uts", "net", "pid", "mnt" };
-	const int num = sizeof(namespaces) / sizeof(char *);
 	jmp_buf env;
-	char buf[PATH_MAX], *val;
-	int i, tfd, child, len, pipenum, consolefd = -1;
-	pid_t pid;
+	char buf[PATH_MAX], *val, *nspaths;
+	int fd, child, len, pipenum, consolefd = -1;
 	char *console;
 
-	val = getenv("_LIBCONTAINER_INITPID");
-	if (val == NULL)
+	// _LIBCONTAINER_NSPATH if exists is a comma-separated list of namespaces
+	// paths that the process should join.
+	nspaths = getenv("_LIBCONTAINER_NSPATH");
+	if (nspaths == NULL) {
 		return;
-
-	pid = atoi(val);
-	snprintf(buf, sizeof(buf), "%d", pid);
-	if (strcmp(val, buf)) {
-		pr_perror("Unable to parse _LIBCONTAINER_INITPID");
-		exit(1);
 	}
-
+	// get the init pipe to communicate with parent
 	val = getenv("_LIBCONTAINER_INITPIPE");
 	if (val == NULL) {
 		pr_perror("Child pipe not found");
 		exit(1);
 	}
-
 	pipenum = atoi(val);
 	snprintf(buf, sizeof(buf), "%d", pipenum);
 	if (strcmp(val, buf)) {
 		pr_perror("Unable to parse _LIBCONTAINER_INITPIPE");
 		exit(1);
 	}
-
+	// get the console path before setns because it may change mnt namespace
 	console = getenv("_LIBCONTAINER_CONSOLE_PATH");
 	if (console != NULL) {
 		consolefd = open(console, O_RDWR);
@@ -106,46 +98,37 @@ void nsexec()
 		}
 	}
 
-	/* Check that the specified process exists */
-	snprintf(buf, PATH_MAX - 1, "/proc/%d/ns", pid);
-	tfd = open(buf, O_DIRECTORY | O_RDONLY);
-	if (tfd == -1) {
-		pr_perror("Failed to open \"%s\"", buf);
-		exit(1);
-	}
-
-	for (i = 0; i < num; i++) {
-		struct stat st;
-		int fd;
-
-		/* Symlinks on all namespaces exist for dead processes, but they can't be opened */
-		if (fstatat(tfd, namespaces[i], &st, AT_SYMLINK_NOFOLLOW) == -1) {
-			// Ignore nonexistent namespaces.
-			if (errno == ENOENT)
-				continue;
-		}
-
-		fd = openat(tfd, namespaces[i], O_RDONLY);
+	char *ns, *saveptr;
+	while ((ns = strtok_r(nspaths, ",", &saveptr))) {
+		fd = open(ns, O_RDONLY);
 		if (fd == -1) {
-			pr_perror("Failed to open ns file %s for ns %s", buf,
-				  namespaces[i]);
+			pr_perror("Failed to open \"%s\"", ns);
 			exit(1);
 		}
-		// Set the namespace.
 		if (setns(fd, 0) == -1) {
-			pr_perror("Failed to setns for %s", namespaces[i]);
+			pr_perror("Failed to setns to \"%s\"", ns);
 			exit(1);
 		}
 		close(fd);
+		nspaths = NULL;
+	}
+
+	// if we dont need to clone, then just let the Go runtime take over
+	val = getenv("_LIBCONTAINER_DOCLONE");
+	if (val == NULL || strcmp(val, "true") != 0) {
+		return;
 	}
 
 	if (setjmp(env) == 1) {
 		// Child
-
-		if (setsid() == -1) {
-			pr_perror("setsid failed");
-			exit(1);
+		val = getenv("_LIBCONTAINER_SETSID");
+		if (val != NULL && strcmp(val, "true") == 0) {
+			if (setsid() == -1) {
+				pr_perror("setsid failed");
+				exit(1);
+			}
 		}
+
 		if (consolefd != -1) {
 			if (ioctl(consolefd, TIOCSCTTY, 0) == -1) {
 				pr_perror("ioctl TIOCSCTTY failed");

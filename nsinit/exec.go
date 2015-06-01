@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
+	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/utils"
 )
 
@@ -26,6 +28,7 @@ var execCommand = cli.Command{
 		cli.BoolFlag{Name: "systemd", Usage: "Use systemd for managing cgroups, if available"},
 		cli.StringFlag{Name: "id", Value: "nsinit", Usage: "specify the ID for a container"},
 		cli.StringFlag{Name: "config", Value: "", Usage: "path to the configuration file"},
+		cli.IntFlag{Name: "pidns", Usage: "pidns to join"},
 		cli.StringFlag{Name: "user,u", Value: "root", Usage: "set the user, uid, and/or gid for the process"},
 		cli.StringFlag{Name: "cwd", Value: "", Usage: "set the current working dir"},
 		cli.StringSliceFlag{Name: "env", Value: standardEnvironment, Usage: "set environment variables for the process"},
@@ -45,9 +48,13 @@ func execAction(context *cli.Context) {
 	container, err := factory.Load(context.String("id"))
 	if err != nil {
 		created = true
+		if pidns := context.Int("pidns"); pidns > 0 {
+			config.Namespaces.Add(configs.NEWPID, fmt.Sprintf("/proc/%d/ns/pid", pidns))
+		}
 		if container, err = factory.Create(context.String("id"), config); err != nil {
 			fatal(err)
 		}
+
 	}
 	process := &libcontainer.Process{
 		Args:   context.Args(),

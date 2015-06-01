@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
@@ -814,5 +815,98 @@ func TestSeccompNoChown(t *testing.T) {
 	}
 	if s := buffers.String(); !strings.Contains(s, "not permitted") {
 		t.Fatalf("running chown should result in an EPERM but got %q", s)
+	}
+}
+
+func TestInitJoinPID(t *testing.T) {
+	if testing.Short() {
+		return
+	}
+	rootfs, err := newRootfs()
+	ok(t, err)
+	defer remove(rootfs)
+
+	// Execute a long-running container
+	container1, err := newContainer(newTemplateConfig(rootfs))
+	ok(t, err)
+	defer container1.Destroy()
+
+	stdinR1, stdinW1, err := os.Pipe()
+	ok(t, err)
+	init1 := &libcontainer.Process{
+		Args:  []string{"cat"},
+		Env:   standardEnvironment,
+		Stdin: stdinR1,
+	}
+	err = container1.Start(init1)
+	stdinR1.Close()
+	defer stdinW1.Close()
+	ok(t, err)
+
+	// get the state of the first container
+	state1, err := container1.State()
+	ok(t, err)
+	pidns1 := state1.NamespacePaths[configs.NEWPID]
+
+	// Execute another container inside the existing pid ns but with a
+	// different cgroups
+	config2 := newTemplateConfig(rootfs)
+	config2.Namespaces.Add(configs.NEWPID, pidns1)
+	config2.Cgroups.Name = "test2"
+	container2, err := newContainerName("testCT2", config2)
+	ok(t, err)
+	defer container2.Destroy()
+
+	stdinR2, stdinW2, err := os.Pipe()
+	ok(t, err)
+	init2 := &libcontainer.Process{
+		Args:  []string{"cat"},
+		Env:   standardEnvironment,
+		Stdin: stdinR2,
+	}
+	err = container2.Start(init2)
+	stdinR2.Close()
+	defer stdinW2.Close()
+	ok(t, err)
+	// get the state of the second container
+	state2, err := container2.State()
+	ok(t, err)
+
+	// check that pidns is the same
+	if state2.NamespacePaths[configs.NEWPID] != state1.NamespacePaths[configs.NEWPID] {
+		t.Errorf("Pidns(%q), wanted %s", state2.NamespacePaths[configs.NEWPID],
+			state1.NamespacePaths[configs.NEWPID])
+	}
+	// check that namespaces are not the same
+	if reflect.DeepEqual(state2.NamespacePaths, state1.NamespacePaths) {
+		t.Errorf("Namespaces(%v), original %v", state2.NamespacePaths,
+			state1.NamespacePaths)
+	}
+	// check that pidns is joined correctly. The initial container process list
+	// should contain the second container's init process
+	buffers := newStdBuffers()
+	ps := &libcontainer.Process{
+		Args:   []string{"ps"},
+		Env:    standardEnvironment,
+		Stdout: buffers.Stdout,
+	}
+	err = container1.Start(ps)
+	ok(t, err)
+	waitProcess(ps, t)
+
+	// Stop init processes one by one. Stop the second container should
+	// not stop the first.
+	stdinW2.Close()
+	waitProcess(init2, t)
+	stdinW1.Close()
+	waitProcess(init1, t)
+
+	out := strings.TrimSpace(buffers.Stdout.String())
+	// output of ps inside the initial PID namespace should have
+	// 1 line of header,
+	// 2 lines of init processes,
+	// 1 line of ps process
+	if len(strings.Split(out, "\n")) != 4 {
+		t.Errorf("unexpected running process, output %q", out)
 	}
 }

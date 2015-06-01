@@ -128,7 +128,7 @@ func (c *linuxContainer) newParentProcess(p *Process, doInit bool) (parentProces
 		return nil, newSystemError(err)
 	}
 	if !doInit {
-		return c.newSetnsProcess(p, cmd, parentPipe, childPipe), nil
+		return c.newSetnsProcess(p, cmd, parentPipe, childPipe)
 	}
 	return c.newInitProcess(p, cmd, parentPipe, childPipe)
 }
@@ -157,7 +157,6 @@ func (c *linuxContainer) commandTemplate(p *Process, childPipe *os.File) (*exec.
 }
 
 func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, parentPipe, childPipe *os.File) (*initProcess, error) {
-	t := "_LIBCONTAINER_INITTYPE=standard"
 	cloneFlags := c.config.Namespaces.CloneFlags()
 	if cloneFlags&syscall.CLONE_NEWUSER != 0 {
 		if err := c.addUidGidMappings(cmd.SysProcAttr); err != nil {
@@ -169,21 +168,60 @@ func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, parentPipe, c
 			cmd.SysProcAttr.Credential = &syscall.Credential{}
 		}
 	}
-	cmd.Env = append(cmd.Env, t)
 	cmd.SysProcAttr.Cloneflags = cloneFlags
+
+	// set init process environment
+	env := []string{"_LIBCONTAINER_INITTYPE=standard"}
+	var joinNamespaces configs.Namespaces
+	var doClone bool
+	nsMaps := make(map[configs.NamespaceType]string)
+	for _, ns := range c.config.Namespaces {
+		if ns.Path != "" {
+			nsMaps[ns.Type] = ns.Path
+			joinNamespaces = append(joinNamespaces, ns)
+			if ns.Type == configs.NEWPID {
+				doClone = true
+			}
+		}
+	}
+	if len(nsMaps) > 0 {
+		nsPaths, err := orderNamespacePaths(nsMaps)
+		if err != nil {
+			return nil, err
+		}
+		env = append(env, fmt.Sprintf("_LIBCONTAINER_NSPATH=%s",
+			strings.Join(nsPaths, ",")))
+	}
+	if doClone {
+		env = append(env, "_LIBCONTAINER_DOCLONE=true")
+	}
+	cmd.Env = append(cmd.Env, env...)
+
 	return &initProcess{
-		cmd:        cmd,
-		childPipe:  childPipe,
-		parentPipe: parentPipe,
-		manager:    c.cgroupManager,
-		config:     c.newInitConfig(p),
+		cmd:            cmd,
+		childPipe:      childPipe,
+		parentPipe:     parentPipe,
+		manager:        c.cgroupManager,
+		config:         c.newInitConfig(p),
+		joinNamespaces: joinNamespaces,
+		doClone:        doClone,
 	}, nil
 }
 
-func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, childPipe *os.File) *setnsProcess {
+func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, childPipe *os.File) (*setnsProcess, error) {
+	state, err := c.currentState()
+	if err != nil {
+		return nil, newSystemError(err)
+	}
+	nsPaths, err := orderNamespacePaths(state.NamespacePaths)
+	if err != nil {
+		return nil, newSystemError(err)
+	}
 	cmd.Env = append(cmd.Env,
-		fmt.Sprintf("_LIBCONTAINER_INITPID=%d", c.initProcess.pid()),
+		fmt.Sprintf("_LIBCONTAINER_NSPATH=%s", strings.Join(nsPaths, ",")),
 		"_LIBCONTAINER_INITTYPE=setns",
+		"_LIBCONTAINER_DOCLONE=true",
+		"_LIBCONTAINER_SETSID=true",
 	)
 	if p.consolePath != "" {
 		cmd.Env = append(cmd.Env, "_LIBCONTAINER_CONSOLE_PATH="+p.consolePath)
@@ -195,7 +233,7 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, 
 		childPipe:   childPipe,
 		parentPipe:  parentPipe,
 		config:      c.newInitConfig(p),
-	}
+	}, nil
 }
 
 func (c *linuxContainer) newInitConfig(process *Process) *initConfig {
@@ -776,4 +814,29 @@ func (c *linuxContainer) currentState() (*State, error) {
 		}
 	}
 	return state, nil
+}
+
+// orderNamespacePaths sorts that namespace paths into a list of paths that we
+// can safely setns to.
+func orderNamespacePaths(namespaces map[configs.NamespaceType]string) ([]string, error) {
+	paths := []string{}
+	for _, nsType := range []configs.NamespaceType{
+		// TODO: enable configs.NEWUSER,
+		configs.NEWIPC,
+		configs.NEWUTS,
+		configs.NEWNET,
+		configs.NEWPID,
+		// mnt namespace must be the last one. After switching to mnt
+		// namespace, the old /proc will be inaccessible.
+		configs.NEWNS,
+	} {
+		if p, ok := namespaces[nsType]; ok && p != "" {
+			// only set to join this namespace if it exists
+			if _, err := os.Lstat(p); err != nil {
+				return nil, newSystemError(err)
+			}
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
 }
