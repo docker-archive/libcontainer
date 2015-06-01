@@ -93,6 +93,11 @@ func modify(config *configs.Config, context *cli.Context) {
 	config.ProcessLabel = context.String("process-label")
 	config.MountLabel = context.String("mount-label")
 
+	// if we use a custom id for nsinit, then use that id as cgroups' name
+	if cid := context.String("id"); cid != "" {
+		config.Cgroups.Name = cid
+	}
+
 	rootfs := context.String("rootfs")
 	if rootfs != "" {
 		config.Rootfs = rootfs
