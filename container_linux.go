@@ -106,8 +106,8 @@ func (c *linuxContainer) Start(process *Process) error {
 	}
 	if err := parent.start(); err != nil {
 		// terminate the process to ensure that it properly is reaped.
-		if err := parent.terminate(); err != nil {
-			logrus.Warn(err)
+		if terr := parent.terminate(); terr != nil {
+			logrus.Warn(terr)
 		}
 		return newSystemError(err)
 	}
