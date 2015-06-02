@@ -78,8 +78,8 @@ type Cgroup struct {
 	// set the freeze value for the process
 	Freezer FreezerState `json:"freezer"`
 
-	// Parent slice to use for systemd TODO: remove in favor or parent
-	Slice string `json:"slice"`
+	// prefix for the scope name
+	ScopePrefix string `json:"scope_prefix"`
 
 	// Whether to disable OOM Killer
 	OomKillDisable bool `json:"oom_kill_disable"`
