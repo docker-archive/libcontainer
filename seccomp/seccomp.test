@@ -1,19 +1,17 @@
-
 package main
 
 import (
-	"fmt"
 	"flag"
 	"os"
+	"fmt"
 	"syscall"
-	 
-	sec "seccomp" 
+	
+	sec "seccomp"
 )
-
 const (
 	STDIN_FILENO  = 0
 	STDOUT_FILENO = 1
-	BUFLEN = 8
+	BUFLEN        = 8
 )
 
 func writeOk(args []string) {
@@ -21,15 +19,15 @@ func writeOk(args []string) {
 
 	sec.ScmpAdd(scmpCtx, "exit", sec.ScmpActAllow)
 	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
-	
+
 	//the first arg is STDOUT_FILENO, the third arg must be <= BUFLEN
 	sec.ScmpAdd(scmpCtx, "write", sec.ScmpActAllow,
-		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO}}},
-		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN}}},
+		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO, 0}}},
+		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN, 0}}},
 	)
 
 	sec.ScmpLoad(scmpCtx)
-	fmt.Printf("8888888\n")  //ok
+	fmt.Printf("8888888\n") //ok
 }
 
 func writeErr(args []string) {
@@ -39,32 +37,32 @@ func writeErr(args []string) {
 	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
 
 	sec.ScmpAdd(scmpCtx, "write", sec.ScmpActAllow,
-		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO}}},
-		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN}}},
+		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO, 0}}},
+		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN, 0}}},
 	)
 
 	sec.ScmpLoad(scmpCtx)
-	
+
 	// bad system call
-	fmt.Printf("99999999\n") 
+	fmt.Printf("99999999\n")
 }
 
 func socketOk(args []string) {
 	scmpCtx, _ := sec.ScmpInit(sec.ScmpActAllow)
-    
-	//for 386, the next line is same as 
+
+	//for 386, the next line is same as
 	//sec.ScmpAdd(scmpCtx, "socketcall", sec.ScmpActAllow,
-	//	sec.FilterArgs{[]sec.Filter{{0, sec.EQ, 1}}},
+	//	sec.FilterArgs{[]sec.Filter{{0, sec.EQ, 1, 0}}},
 	//)
 	//SYS_SOCKET = 1
 	sec.ScmpAdd(scmpCtx, "socket", sec.ScmpActAllow)
-	
+
 	sec.ScmpAdd(scmpCtx, "exit", sec.ScmpActAllow)
 	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
 
 	sec.ScmpAdd(scmpCtx, "write", sec.ScmpActAllow,
-		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO}}},
-		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN}}},
+		sec.FilterArgs{[]sec.Filter{{0, sec.EQ, STDOUT_FILENO, 0}}},
+		sec.FilterArgs{[]sec.Filter{{2, sec.LE, BUFLEN, 0}}},
 	)
 
 	sec.ScmpLoad(scmpCtx)
@@ -76,32 +74,58 @@ func socketOk(args []string) {
 func socketErr(args []string) {
 	scmpCtx, _ := sec.ScmpInit(sec.ScmpActAllow)
 
-	sec.ScmpAdd(scmpCtx,"exit", sec.ScmpActAllow)
+	sec.ScmpAdd(scmpCtx, "exit", sec.ScmpActAllow)
 	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
 
 	sec.ScmpLoad(scmpCtx)
-	
+
 	// bad system call
 	syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_IP)
 }
 
+func maskEqualOk(args []string) {
+	scmpCtx, _ := sec.ScmpInit(sec.ScmpActAllow)
 
+	sec.ScmpAdd(scmpCtx, "clone", sec.ScmpActAllow,
+		sec.FilterArgs{[]sec.Filter{{2, sec.MEQ, 0x1, 0x5}}},
+	)
+	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
+	sec.ScmpLoad(scmpCtx)
+	
+	//0x3 & 0x5 == 0x1, It's ok
+	syscall.RawSyscall6(syscall.SYS_CLONE, 0, 0, 0x3, 0, 0, 0) 
+}
+
+func maskEqualErr(args []string) {
+	scmpCtx, _ := sec.ScmpInit(sec.ScmpActAllow)
+
+	sec.ScmpAdd(scmpCtx, "clone", sec.ScmpActAllow,
+		sec.FilterArgs{[]sec.Filter{{2, sec.MEQ, 0x1, 0x7}}},
+	)
+	sec.ScmpAdd(scmpCtx, "exit_group", sec.ScmpActAllow)
+	sec.ScmpLoad(scmpCtx)
+    
+	//0x3 & 0x7 != 0x1, bad system call
+	syscall.RawSyscall6(syscall.SYS_CLONE, 0, 0, 0x3, 0, 0, 0) 
+}
 
 func main() {
 	flag.Parse()
 
-    if 1 == flag.NArg() {
-	    idx := 0
-		args := os.Args[(idx + 1):]
-	    if flag.Arg(idx) == "writeOk" {
-			writeOk(args)
-		} else if flag.Arg(idx) == "writeErr" {
-			writeErr(args)
-		} else if flag.Arg(idx) == "socketOk" {
-			socketOk(args)
-		} else if flag.Arg(idx) == "socketErr" {
-			socketErr(args)
-		}
+	idx := 0
+	args := os.Args[(idx + 1):]
+
+	if flag.Arg(idx) == "writeOk" {
+		writeOk(args)
+	} else if flag.Arg(idx) == "writeErr" {
+		writeErr(args)
+	} else if flag.Arg(idx) == "socketOk" {
+		socketOk(args)
+	} else if flag.Arg(idx) == "socketErr" {
+		socketErr(args)
+	} else if flag.Arg(idx) == "maskEqualOk" {
+		maskEqualOk(args)
+	} else if flag.Arg(idx) == "maskEqualErr" {
+		maskEqualErr(args)
 	}
 }
-

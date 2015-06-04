@@ -22,11 +22,11 @@ func secMain(t *testing.T, args []string) {
 	_, err := c.Output()
 	fmt.Printf("do %s, err is [%v]\n", cmd, err)
 	if err != nil {
-		if "writeOk" == cmd || "socketOk" == cmd {
+		if "writeOk" == cmd || "socketOk" == cmd || "maskEqualOk" == cmd {
 			t.Fatal(err)
 		}
 	} else {
-		if "writeErr" == cmd || "socketErr" == cmd {
+		if "writeErr" == cmd || "socketErr" == cmd || "maskEqualErr" == cmd {
 			t.Fatal(err)
 		}
 	}
@@ -55,4 +55,6 @@ func TestSeccomp(t *testing.T) {
 	secMain(t, []string{"writeErr"})
 	secMain(t, []string{"socketOk"})
 	secMain(t, []string{"socketErr"})
+	secMain(t, []string{"maskEqualOk"})
+	secMain(t, []string{"maskEqualErr"})
 }

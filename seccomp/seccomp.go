@@ -1,6 +1,8 @@
 package seccomp
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -12,10 +14,11 @@ import (
 )
 
 const (
-	EQ = 0
-	NE = 1
-	GE = 2
-	LE = 3
+	EQ  = 0
+	NE  = 1
+	GE  = 2
+	LE  = 3
+	MEQ = 4
 )
 
 const (
@@ -29,10 +32,6 @@ const (
 	JUMP_JF  = 0xff
 	LABEL_JT = 0xfe
 	LABEL_JF = 0xfe
-)
-
-const (
-	pseudoCall = 30
 )
 
 const (
@@ -52,6 +51,8 @@ const (
 	BPF_JGT  = syscall.BPF_JGT
 	BPF_JGE  = syscall.BPF_JGE
 	BPF_JSET = syscall.BPF_JSET
+	BPF_ALU  = syscall.BPF_ALU
+	BPF_AND  = syscall.BPF_AND
 
 	SECCOMP_RET_KILL    = 0x00000000
 	SECCOMP_RET_TRAP    = 0x00030000
@@ -90,8 +91,9 @@ type Action struct {
 
 type Filter struct {
 	Arg uint32 //index of args which start from zero
-	Op  int    //operation, such ass EQ/NE/GE/LE
+	Op  int    //operation, such ass EQ/NE/GE/LE/MEQ
 	V   uint   //the value of arg
+	M   uint   //the mask of arg
 }
 
 type bpfLabel struct {
@@ -112,16 +114,17 @@ type ScmpCtx struct {
 
 type argOFunc func(uint32) uint32
 type argFunc func(*ScmpCtx, uint32)
-type jFunc func(*ScmpCtx, uint, sockFilter)
+type jFunc func(*ScmpCtx, Filter, sockFilter)
 type addFunc func(ctx *ScmpCtx, call int, action int, args ...FilterArgs) error
 
 var secData seccompData = seccompData{0, 0, 0, [6]uint64{0, 0, 0, 0, 0, 0}}
 var hiArg argOFunc
 var loArg argOFunc
 var arg argFunc
+
 var secAdd addFunc = nil
 
-var op [4]jFunc
+var op [5]jFunc
 
 var (
 	sysCallMin = 0
@@ -134,24 +137,28 @@ func arg32(ctx *ScmpCtx, idx uint32) {
 		scmpBpfStmt(BPF_LD+BPF_W+BPF_ABS, loArg(idx)))
 }
 
-func jEq32(ctx *ScmpCtx, v uint, jt sockFilter) {
-	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, uint32(v), 0, 1))
+func jEq32(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, uint32(v.V), 0, 1))
 	ctx.filter = append(ctx.filter, jt)
 }
 
-func jNe32(ctx *ScmpCtx, v uint, jt sockFilter) {
-	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, uint32(v), 1, 0))
+func jNe32(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, uint32(v.V), 1, 0))
 	ctx.filter = append(ctx.filter, jt)
 }
 
-func jGe32(ctx *ScmpCtx, v uint, jt sockFilter) {
-	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JGE+BPF_K, uint32(v), 0, 1))
+func jGe32(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JGE+BPF_K, uint32(v.V), 0, 1))
 	ctx.filter = append(ctx.filter, jt)
 }
 
-func jLe32(ctx *ScmpCtx, v uint, jt sockFilter) {
-	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JGT+BPF_K, uint32(v), 1, 0))
+func jLe32(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JGT+BPF_K, uint32(v.V), 1, 0))
 	ctx.filter = append(ctx.filter, jt)
+}
+
+func jMeq32(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	//todo, not implement now
 }
 
 func arg64(ctx *ScmpCtx, idx uint32) {
@@ -161,9 +168,9 @@ func arg64(ctx *ScmpCtx, idx uint32) {
 	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_ST, 1))
 }
 
-func jNe64(ctx *ScmpCtx, v uint, jt sockFilter) {
-	lo := uint32(uint64(v) % 0x100000000)
-	hi := uint32(uint64(v) / 0x100000000)
+func jNe64(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	lo := uint32(uint64(v.V) % 0x100000000)
+	hi := uint32(uint64(v.V) / 0x100000000)
 	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, (hi), 5, 0))
 	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 0))
 	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, (lo), 2, 0))
@@ -172,9 +179,9 @@ func jNe64(ctx *ScmpCtx, v uint, jt sockFilter) {
 	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 1))
 }
 
-func jGe64(ctx *ScmpCtx, v uint, jt sockFilter) {
-	lo := uint32(uint64(v) % 0x100000000)
-	hi := uint32(uint64(v) / 0x100000000)
+func jGe64(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	lo := uint32(uint64(v.V) % 0x100000000)
+	hi := uint32(uint64(v.V) / 0x100000000)
 	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JGT+BPF_K, (hi), 4, 0))
 	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, (hi), 0, 5))
 	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 0))
@@ -184,9 +191,9 @@ func jGe64(ctx *ScmpCtx, v uint, jt sockFilter) {
 	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 1))
 }
 
-func jEq64(ctx *ScmpCtx, v uint, jt sockFilter) {
-	lo := uint32(uint64(v) % 0x100000000)
-	hi := uint32(uint64(v) / 0x100000000)
+func jEq64(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	lo := uint32(uint64(v.V) % 0x100000000)
+	hi := uint32(uint64(v.V) / 0x100000000)
 	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, (hi), 0, 5))
 	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 0))
 	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, (lo), 0, 2))
@@ -195,9 +202,22 @@ func jEq64(ctx *ScmpCtx, v uint, jt sockFilter) {
 	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 1))
 }
 
-func jLe64(ctx *ScmpCtx, v uint, jt sockFilter) {
-	lo := uint32(uint64(v) % 0x100000000)
-	hi := uint32(uint64(v) / 0x100000000)
+func jMeq64(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	lo := uint32(uint64(v.V) % 0x100000000)
+	hi := uint32(uint64(v.V) / 0x100000000)
+	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, (hi), 0, 6))
+	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 0))
+	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_ALU+BPF_AND, uint32(v.M)))
+	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, (lo), 0, 2))
+	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 1))
+	ctx.filter = append(ctx.filter, jt)
+	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 1))
+
+}
+
+func jLe64(ctx *ScmpCtx, v Filter, jt sockFilter) {
+	lo := uint32(uint64(v.V) % 0x100000000)
+	hi := uint32(uint64(v.V) / 0x100000000)
 	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JGT+BPF_K, (hi), 6, 0))
 	ctx.filter = append(ctx.filter, scmpBpfJump(BPF_JMP+BPF_JEQ+BPF_K, (hi), 0, 3))
 	ctx.filter = append(ctx.filter, scmpBpfStmt(BPF_LD+BPF_MEM, 0))
@@ -323,6 +343,14 @@ func CombineArgs(args1 []FilterArgs, args2 []FilterArgs) []FilterArgs {
 	return args1
 }
 
+func Sys(call string) int {
+	number, exists := syscallMap[call]
+	if exists {
+		return number
+	}
+	return -1
+}
+
 func ScmpInit(action int) (*ScmpCtx, error) {
 	ctx := ScmpCtx{
 		CallMap: make(map[int]*Action),
@@ -369,6 +397,29 @@ func ScmpAdd(ctx *ScmpCtx, scall string, action int, args ...FilterArgs) error {
 	return errors.New("syscall not surport")
 }
 
+func dumpHex(ch []byte, len int) {
+	for i := 0; i < len; i++ {
+		fmt.Printf("%02x ", ch[i])
+		if (i+1)%16 == 0 {
+			fmt.Printf("\n")
+		} else if (i+1)%8 == 0 {
+			fmt.Printf(" ")
+		}
+	}
+	fmt.Printf("\n")
+}
+
+func dumpFilter(filter []sockFilter) {
+	buf := new(bytes.Buffer)
+	for _, v := range filter {
+		err := binary.Write(buf, binary.LittleEndian, v)
+		if err != nil {
+			fmt.Println("binary.Write failed:", err)
+		}
+	}
+	dumpHex(buf.Bytes(), int(unsafe.Sizeof(filter[0]))*len(filter))
+}
+
 func ScmpLoad(ctx *ScmpCtx) error {
 	for call, act := range ctx.CallMap {
 		if len(act.args) == 0 {
@@ -401,12 +452,14 @@ func ScmpLoad(ctx *ScmpCtx) error {
 				} else {
 					jf = scmpBpfStmt(BPF_RET+BPF_K, SECCOMP_RET_ALLOW)
 				}
-				op[act.args[i].Args[j].Op](ctx, act.args[i].Args[j].V, jf)
+				op[act.args[i].Args[j].Op](ctx, act.args[i].Args[j], jf)
 			}
 
 			deny(ctx)
 		}
 	}
+
+	//dumpFilter(ctx.filter)
 
 	idx := int32(len(ctx.filter) - 1)
 	for ; idx >= 0; idx-- {
@@ -433,6 +486,8 @@ func ScmpLoad(ctx *ScmpCtx) error {
 			filter.jf = 0
 		}
 	}
+
+	//dumpFilter(ctx.filter)
 	prog := sockFprog{
 		len:  uint16(len(ctx.filter)),
 		filt: ctx.filter,
@@ -489,13 +544,16 @@ func init() {
 		op[NE] = jNe64
 		op[GE] = jGe64
 		op[LE] = jLe64
+		op[MEQ] = jMeq64
 	} else {
 		arg = arg32
 		op[EQ] = jEq32
 		op[NE] = jNe32
 		op[GE] = jGe32
 		op[LE] = jLe32
+		op[MEQ] = jMeq32
 	}
+
 	chSignal := make(chan os.Signal)
 	signal.Notify(chSignal, syscall.SIGSYS)
 	go sigSeccomp()
