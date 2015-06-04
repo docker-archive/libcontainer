@@ -1,7 +1,10 @@
 package integration
 
 import (
+	"bufio"
 	"bytes"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -713,4 +716,75 @@ func TestSystemProperties(t *testing.T) {
 	if shmmniOutput != "8192" {
 		t.Fatalf("kernel.shmmni property expected to be 8192, but is %s", shmmniOutput)
 	}
+}
+
+func formExceptSyscall(configFile string, excall []string, Seccomps *configs.SeccompConf) error {
+	f, err := os.Open(configFile)
+	defer f.Close()
+	if nil == err {
+		buff := bufio.NewReader(f)
+		for {
+			line, err := buff.ReadString('\n')
+			if err != nil || io.EOF == err {
+				break
+			}
+			if strings.Index(line, "//") >= 0 || len(line) == 1 {
+				continue
+			}
+			call := strings.TrimSpace(line)
+			j := 0
+			for _, key := range excall {
+				if call == key {
+					break
+				}
+				j++
+			}
+			if j == len(excall) {
+				Seccomps.SysCalls = append(Seccomps.SysCalls, call)
+			}
+		}
+	}
+	return nil
+}
+
+func TestSeccompNotStat(t *testing.T) {
+	if testing.Short() {
+		return
+	}
+
+	rootfs, err := newRootfs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remove(rootfs)
+	config := newTemplateConfig(rootfs)
+	exceptCall := []string{"stat"}
+	formExceptSyscall("../hack/syscall.sample", exceptCall, &config.Seccomps)
+
+	out, _, err := runContainer(config, "", "/bin/sh", "-c", "ls / -l")
+	if err == nil {
+		t.Fatal("runontainer[ls without SYS_STAT] should be failed")
+	} else {
+		fmt.Println(out)
+	}
+}
+
+func TestSeccompStat(t *testing.T) {
+	if testing.Short() {
+		return
+	}
+	rootfs, err := newRootfs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remove(rootfs)
+
+	config := newTemplateConfig(rootfs)
+	exceptCall := []string{}
+	formExceptSyscall("../hack/syscall.sample", exceptCall, &config.Seccomps)
+	out, _, err := runContainer(config, "", "/bin/sh", "-c", "ls / -l")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(out)
 }

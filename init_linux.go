@@ -13,6 +13,7 @@ import (
 	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/netlink"
+	"github.com/docker/libcontainer/seccomp"
 	"github.com/docker/libcontainer/system"
 	"github.com/docker/libcontainer/user"
 	"github.com/docker/libcontainer/utils"
@@ -257,5 +258,17 @@ func killCgroupProcesses(m cgroups.Manager) error {
 			logrus.Warn(err)
 		}
 	}
+	return nil
+}
+
+func finalizeSeccomp(config *initConfig) error {
+	if len(config.Config.Seccomps.SysCalls) > 0 {
+		scmpCtx, _ := seccomp.ScmpInit(seccomp.ScmpActAllow)
+		for _, key := range config.Config.Seccomps.SysCalls {
+			seccomp.ScmpAdd(scmpCtx, key, seccomp.ScmpActAllow)
+		}
+		return seccomp.ScmpLoad(scmpCtx)
+	}
+
 	return nil
 }
