@@ -1,9 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
+	"github.com/docker/docker/pkg/units"
+	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/utils"
 )
@@ -19,40 +20,38 @@ import (
 const defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 
 var createFlags = []cli.Flag{
-	cli.IntFlag{Name: "parent-death-signal", Usage: "set the signal that will be delivered to the process in case the parent dies"},
+	cli.BoolFlag{Name: "cgroup", Usage: "mount the cgroup data for the container"},
 	cli.BoolFlag{Name: "read-only", Usage: "set the container's rootfs as read-only"},
-	cli.StringSliceFlag{Name: "bind", Value: &cli.StringSlice{}, Usage: "add bind mounts to the container"},
-	cli.StringSliceFlag{Name: "tmpfs", Value: &cli.StringSlice{}, Usage: "add tmpfs mounts to the container"},
 	cli.IntFlag{Name: "cpushares", Usage: "set the cpushares for the container"},
-	cli.IntFlag{Name: "memory-limit", Usage: "set the memory limit for the container"},
-	cli.IntFlag{Name: "memory-swap", Usage: "set the memory swap limit for the container"},
+	cli.IntFlag{Name: "parent-death-signal", Usage: "set the signal that will be delivered to the process in case the parent dies"},
+	cli.IntFlag{Name: "userns", Usage: "set the user namespace root uid"},
+	cli.IntFlag{Name: "veth-mtu", Usage: "veth mtu"},
+	cli.StringFlag{Name: "apparmor-profile", Usage: "set the apparmor profile"},
 	cli.StringFlag{Name: "cpuset-cpus", Usage: "set the cpuset cpus"},
 	cli.StringFlag{Name: "cpuset-mems", Usage: "set the cpuset mems"},
-	cli.StringFlag{Name: "apparmor-profile", Usage: "set the apparmor profile"},
-	cli.StringFlag{Name: "process-label", Usage: "set the process label"},
-	cli.StringFlag{Name: "mount-label", Usage: "set the mount label"},
-	cli.StringFlag{Name: "rootfs", Usage: "set the rootfs"},
-	cli.IntFlag{Name: "userns-root-uid", Usage: "set the user namespace root uid"},
-	cli.StringFlag{Name: "hostname", Value: "nsinit", Usage: "hostname value for the container"},
-	cli.StringFlag{Name: "net", Value: "", Usage: "network namespace"},
+	cli.StringFlag{Name: "hostname", Value: getDefaultID(), Usage: "hostname value for the container"},
 	cli.StringFlag{Name: "ipc", Value: "", Usage: "ipc namespace"},
-	cli.StringFlag{Name: "pid", Value: "", Usage: "pid namespace"},
-	cli.StringFlag{Name: "uts", Value: "", Usage: "uts namespace"},
+	cli.StringFlag{Name: "memory-limit", Usage: "set the memory limit for the container(32M)"},
+	cli.StringFlag{Name: "memory-swap", Usage: "set the memory swap limit for the container(32M)"},
 	cli.StringFlag{Name: "mnt", Value: "", Usage: "mount namespace"},
-	cli.StringFlag{Name: "veth-bridge", Usage: "veth bridge"},
+	cli.StringFlag{Name: "mount-label", Usage: "set the mount label"},
+	cli.StringFlag{Name: "net", Value: "", Usage: "network namespace"},
+	cli.StringFlag{Name: "pid", Value: "", Usage: "pid namespace"},
+	cli.StringFlag{Name: "process-label", Usage: "set the process label"},
+	cli.StringFlag{Name: "rootfs", Usage: "set the rootfs"},
+	cli.StringFlag{Name: "uts", Value: "", Usage: "uts namespace"},
 	cli.StringFlag{Name: "veth-address", Usage: "veth ip address"},
+	cli.StringFlag{Name: "veth-bridge", Usage: "veth bridge"},
 	cli.StringFlag{Name: "veth-gateway", Usage: "veth gateway address"},
-	cli.IntFlag{Name: "veth-mtu", Usage: "veth mtu"},
-	cli.BoolFlag{Name: "cgroup", Usage: "mount the cgroup data for the container"},
+	cli.StringSliceFlag{Name: "bind", Value: &cli.StringSlice{}, Usage: "add bind mounts to the container"},
 	cli.StringSliceFlag{Name: "sysctl", Value: &cli.StringSlice{}, Usage: "set system properties in the container"},
+	cli.StringSliceFlag{Name: "tmpfs", Value: &cli.StringSlice{}, Usage: "add tmpfs mounts to the container"},
 }
 
 var configCommand = cli.Command{
 	Name:  "config",
 	Usage: "generate a standard configuration file for a container",
-	Flags: append([]cli.Flag{
-		cli.StringFlag{Name: "file,f", Value: "stdout", Usage: "write the configuration to the specified file"},
-	}, createFlags...),
+	Flags: createFlags,
 	Action: func(context *cli.Context) {
 		template := getTemplate()
 		modify(template, context)
@@ -60,20 +59,7 @@ var configCommand = cli.Command{
 		if err != nil {
 			fatal(err)
 		}
-		var f *os.File
-		filePath := context.String("file")
-		switch filePath {
-		case "stdout", "":
-			f = os.Stdout
-		default:
-			if f, err = os.Create(filePath); err != nil {
-				fatal(err)
-			}
-			defer f.Close()
-		}
-		if _, err := io.Copy(f, bytes.NewBuffer(data)); err != nil {
-			fatal(err)
-		}
+		fmt.Printf("%s", data)
 	},
 }
 
@@ -83,18 +69,29 @@ func modify(config *configs.Config, context *cli.Context) {
 	config.Cgroups.CpusetCpus = context.String("cpuset-cpus")
 	config.Cgroups.CpusetMems = context.String("cpuset-mems")
 	config.Cgroups.CpuShares = int64(context.Int("cpushares"))
-	config.Cgroups.Memory = int64(context.Int("memory-limit"))
-	config.Cgroups.MemorySwap = int64(context.Int("memory-swap"))
+	if rawMem := context.String("memory-limit"); rawMem != "" {
+		memory, err := units.FromHumanSize(rawMem)
+		if err != nil {
+			logrus.Fatalf("invalid memory-limit %s", rawMem)
+		}
+		config.Cgroups.Memory = memory
+	}
+	config.Cgroups.MemorySwap = -1
+	if rawSwap := context.String("memory-swap"); rawSwap != "" {
+		swap, err := units.FromHumanSize(rawSwap)
+		if err != nil {
+			logrus.Fatalf("invalid memory-swap %s", rawSwap)
+		}
+		config.Cgroups.MemorySwap = swap
+	}
 	config.AppArmorProfile = context.String("apparmor-profile")
 	config.ProcessLabel = context.String("process-label")
 	config.MountLabel = context.String("mount-label")
-
 	rootfs := context.String("rootfs")
 	if rootfs != "" {
 		config.Rootfs = rootfs
 	}
-
-	userns_uid := context.Int("userns-root-uid")
+	userns_uid := context.Int("userns")
 	if userns_uid != 0 {
 		config.Namespaces.Add(configs.NEWUSER, "")
 		config.UidMappings = []configs.IDMap{
@@ -210,35 +207,39 @@ func getTemplate() *configs.Config {
 	if err != nil {
 		panic(err)
 	}
+	cgroupRoot, err := cgroups.GetThisCgroupDir("devices")
+	if err != nil {
+		panic(err)
+	}
 	return &configs.Config{
 		Rootfs:            cwd,
 		ParentDeathSignal: int(syscall.SIGKILL),
 		Capabilities: []string{
+			"AUDIT_WRITE",
 			"CHOWN",
 			"DAC_OVERRIDE",
-			"FSETID",
 			"FOWNER",
-			"MKNOD",
-			"NET_RAW",
-			"SETGID",
-			"SETUID",
-			"SETFCAP",
-			"SETPCAP",
-			"NET_BIND_SERVICE",
-			"SYS_CHROOT",
+			"FSETID",
 			"KILL",
-			"AUDIT_WRITE",
+			"MKNOD",
+			"NET_BIND_SERVICE",
+			"NET_RAW",
+			"SETFCAP",
+			"SETGID",
+			"SETPCAP",
+			"SETUID",
+			"SYS_CHROOT",
 		},
 		Namespaces: configs.Namespaces([]configs.Namespace{
-			{Type: configs.NEWNS},
-			{Type: configs.NEWUTS},
 			{Type: configs.NEWIPC},
-			{Type: configs.NEWPID},
 			{Type: configs.NEWNET},
+			{Type: configs.NEWNS},
+			{Type: configs.NEWPID},
+			{Type: configs.NEWUTS},
 		}),
 		Cgroups: &configs.Cgroup{
 			Name:            filepath.Base(cwd),
-			Parent:          "nsinit",
+			Parent:          cgroupRoot,
 			AllowAllDevices: false,
 			AllowedDevices:  configs.DefaultAllowedDevices,
 		},

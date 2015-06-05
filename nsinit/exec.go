@@ -2,123 +2,97 @@ package main
 
 import (
 	"os"
-	"os/exec"
-	"os/signal"
-	"syscall"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
-	"github.com/docker/libcontainer/utils"
+	"github.com/docker/libcontainer/configs"
 )
 
-var standardEnvironment = &cli.StringSlice{
-	"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-	"HOSTNAME=nsinit",
-	"TERM=xterm",
-}
-
 var execCommand = cli.Command{
-	Name:   "exec",
-	Usage:  "execute a new command inside a container",
-	Action: execAction,
+	Name:  "exec",
+	Usage: "execute a new command inside the container",
 	Flags: append([]cli.Flag{
+		idFlag,
 		cli.BoolFlag{Name: "tty,t", Usage: "allocate a TTY to the container"},
-		cli.BoolFlag{Name: "systemd", Usage: "Use systemd for managing cgroups, if available"},
-		cli.StringFlag{Name: "id", Value: "nsinit", Usage: "specify the ID for a container"},
 		cli.StringFlag{Name: "config", Value: "", Usage: "path to the configuration file"},
 		cli.StringFlag{Name: "user,u", Value: "root", Usage: "set the user, uid, and/or gid for the process"},
 		cli.StringFlag{Name: "cwd", Value: "", Usage: "set the current working dir"},
-		cli.StringSliceFlag{Name: "env", Value: standardEnvironment, Usage: "set environment variables for the process"},
 	}, createFlags...),
-}
-
-func execAction(context *cli.Context) {
-	factory, err := loadFactory(context)
-	if err != nil {
-		fatal(err)
-	}
-	config, err := loadConfig(context)
-	if err != nil {
-		fatal(err)
-	}
-	created := false
-	container, err := factory.Load(context.String("id"))
-	if err != nil {
-		created = true
-		if container, err = factory.Create(context.String("id"), config); err != nil {
+	Action: func(context *cli.Context) {
+		config, err := loadConfig(context)
+		if err != nil {
 			fatal(err)
 		}
-	}
-	process := &libcontainer.Process{
+		status, err := execContainer(context, config)
+		if err != nil {
+			fatal(err)
+		}
+		os.Exit(status)
+	},
+}
+
+func newProcess(context *cli.Context) *libcontainer.Process {
+	return &libcontainer.Process{
 		Args:   context.Args(),
-		Env:    context.StringSlice("env"),
+		Env:    os.Environ(),
 		User:   context.String("user"),
 		Cwd:    context.String("cwd"),
 		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 	}
-	rootuid, err := config.HostUID()
-	if err != nil {
-		fatal(err)
-	}
-	tty, err := newTty(context, process, rootuid)
-	if err != nil {
-		fatal(err)
-	}
-	if err := tty.attach(process); err != nil {
-		fatal(err)
-	}
-	go handleSignals(process, tty)
-	err = container.Start(process)
-	if err != nil {
-		tty.Close()
-		if created {
-			container.Destroy()
-		}
-		fatal(err)
-	}
-
-	status, err := process.Wait()
-	if err != nil {
-		exitError, ok := err.(*exec.ExitError)
-		if ok {
-			status = exitError.ProcessState
-		} else {
-			tty.Close()
-			if created {
-				container.Destroy()
-			}
-			fatal(err)
-		}
-	}
-	if created {
-		status, err := container.Status()
-		if err != nil {
-			tty.Close()
-			fatal(err)
-		}
-		if status != libcontainer.Checkpointed {
-			if err := container.Destroy(); err != nil {
-				tty.Close()
-				fatal(err)
-			}
-		}
-	}
-	tty.Close()
-	os.Exit(utils.ExitStatus(status.Sys().(syscall.WaitStatus)))
 }
 
-func handleSignals(container *libcontainer.Process, tty *tty) {
-	sigc := make(chan os.Signal, 10)
-	signal.Notify(sigc)
-	tty.resize()
-	for sig := range sigc {
-		switch sig {
-		case syscall.SIGWINCH:
-			tty.resize()
-		default:
-			container.Signal(sig)
+func getOrCreateContainer(context *cli.Context, config *configs.Config) (libcontainer.Container, bool, error) {
+	factory, err := loadFactory(context)
+	if err != nil {
+		return nil, false, err
+	}
+	created := false
+	container, err := factory.Load(context.String("id"))
+	if err != nil {
+		created = true
+		if container, err = factory.Create(context.String("id"), config); err != nil {
+			return nil, false, err
 		}
 	}
+	return container, created, nil
+}
+
+func destoryMaybe(container libcontainer.Container, created bool) {
+	status, err := container.Status()
+	if err != nil {
+		logrus.Error(err)
+	}
+	if created && status != libcontainer.Checkpointed {
+		if err := container.Destroy(); err != nil {
+			logrus.Error(err)
+		}
+	}
+}
+
+func execContainer(context *cli.Context, config *configs.Config) (int, error) {
+	rootuid, err := config.HostUID()
+	if err != nil {
+		return -1, err
+	}
+	container, created, err := getOrCreateContainer(context, config)
+	if err != nil {
+		return -1, err
+	}
+	// ensure that the container is always removed if we were the process
+	// that created it.
+	defer destoryMaybe(container, created)
+	process := newProcess(context)
+	tty, err := newTty(context, process, rootuid)
+	if err != nil {
+		return -1, err
+	}
+	handler := newSignalHandler(tty)
+	defer handler.Close()
+	if err := container.Start(process); err != nil {
+		return -1, err
+	}
+	return handler.process(process)
 }

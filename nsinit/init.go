@@ -3,7 +3,6 @@ package main
 import (
 	"runtime"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/docker/libcontainer"
 	_ "github.com/docker/libcontainer/nsenter"
@@ -11,18 +10,14 @@ import (
 
 var initCommand = cli.Command{
 	Name:  "init",
-	Usage: "runs the init process inside the namespace",
+	Usage: "**internal command for setting up the container's namespaces, this should not be directly invoked**",
 	Action: func(context *cli.Context) {
-		logrus.SetLevel(logrus.DebugLevel)
 		runtime.GOMAXPROCS(1)
 		runtime.LockOSThread()
-		factory, err := libcontainer.New("")
-		if err != nil {
-			fatal(err)
-		}
+		factory, _ := libcontainer.New("")
 		if err := factory.StartInitialization(); err != nil {
 			fatal(err)
 		}
-		panic("This line should never been executed")
+		panic("--this line should never been executed, congradulations--")
 	},
 }

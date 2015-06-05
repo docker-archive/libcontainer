@@ -2,17 +2,18 @@ package main
 
 import (
 	"fmt"
-	"github.com/codegangsta/cli"
-	"github.com/docker/libcontainer"
 	"strconv"
 	"strings"
+
+	"github.com/codegangsta/cli"
+	"github.com/docker/libcontainer"
 )
 
 var checkpointCommand = cli.Command{
 	Name:  "checkpoint",
 	Usage: "checkpoint a running container",
 	Flags: []cli.Flag{
-		cli.StringFlag{Name: "id", Value: "nsinit", Usage: "specify the ID for a container"},
+		idFlag,
 		cli.StringFlag{Name: "image-path", Value: "", Usage: "path for saving criu image files"},
 		cli.StringFlag{Name: "work-path", Value: "", Usage: "path for saving work files and logs"},
 		cli.BoolFlag{Name: "leave-running", Usage: "leave the process running after checkpointing"},
@@ -24,14 +25,12 @@ var checkpointCommand = cli.Command{
 	Action: func(context *cli.Context) {
 		imagePath := context.String("image-path")
 		if imagePath == "" {
-			fatal(fmt.Errorf("The --image-path option isn't specified"))
+			imagePath = getDefaultImagePath(context)
 		}
-
 		container, err := getContainer(context)
 		if err != nil {
 			fatal(err)
 		}
-
 		// these are the mandatory criu options for a container
 		criuOpts := &libcontainer.CriuOpts{
 			ImagesDirectory:         imagePath,
@@ -41,7 +40,6 @@ var checkpointCommand = cli.Command{
 			ExternalUnixConnections: context.Bool("ext-unix-sk"),
 			ShellJob:                context.Bool("shell-job"),
 		}
-
 		// xxx following criu opts are optional
 		// The dump image can be sent to a criu page server
 		if psOpt := context.String("page-server"); psOpt != "" {
@@ -49,7 +47,6 @@ var checkpointCommand = cli.Command{
 			if len(addressPort) != 2 {
 				fatal(fmt.Errorf("Use --page-server ADDRESS:PORT to specify page server"))
 			}
-
 			port_int, err := strconv.Atoi(addressPort[1])
 			if err != nil {
 				fatal(fmt.Errorf("Invalid port number"))
@@ -59,7 +56,6 @@ var checkpointCommand = cli.Command{
 				Port:    int32(port_int),
 			}
 		}
-
 		if err := container.Checkpoint(criuOpts); err != nil {
 			fatal(err)
 		}
