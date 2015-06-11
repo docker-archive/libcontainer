@@ -227,7 +227,7 @@ func modifySecurityProfile(context *cli.Context, config *configs.Config) {
 	}
 	config.Rlimits = profile.Rlimits
 	config.Capabilities = profile.Capabilities
-	config.Seccomp = profile.Seccomp
+	config.SeccompConfig = profile.Seccomp
 	config.AppArmorProfile = profile.ApparmorProfile
 	config.MountLabel = profile.MountLabel
 	config.ProcessLabel = profile.ProcessLabel

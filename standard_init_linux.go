@@ -86,8 +86,8 @@ func (l *linuxStandardInit) Init() error {
 	if err != nil {
 		return err
 	}
-	if l.config.Config.SeccompConfig.Enable {
-		if err := seccomp.InitSeccomp(&l.config.Config.SeccompConfig); err != nil {
+	if l.config.Config.SeccompConfig != nil && l.config.Config.SeccompConfig.Enable {
+		if err := seccomp.InitSeccomp(l.config.Config.SeccompConfig); err != nil {
 			return err
 		}
 	}
@@ -104,9 +104,6 @@ func (l *linuxStandardInit) Init() error {
 	// just kill ourself and not cause problems for someone else.
 	if syscall.Getppid() != l.parentPid {
 		return syscall.Kill(syscall.Getpid(), syscall.SIGKILL)
-	}
-	if err := finalizeSeccomp(l.config); err != nil {
-		return err
 	}
 	return system.Execv(l.config.Args[0], l.config.Args[0:], os.Environ())
 }

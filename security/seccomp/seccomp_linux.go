@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	libseccomp "github.com/mheon/golang-seccomp"
+	libseccomp "github.com/seccomp/libseccomp-golang"
 )
 
 var (
