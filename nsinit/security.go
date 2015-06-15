@@ -38,9 +38,9 @@ var highProfile = &securityProfile{
 	},
 	// http://man7.org/linux/man-pages/man2/syscalls.2.html
 	Seccomp: &seccomp.Config{
-		Enable: true,
+		Enable:          true,
 		WhitelistToggle: false,
-		Architectures: []string{},
+		Architectures:   []string{},
 		Syscalls: []*seccomp.BlockedSyscall{
 			{
 				Name: "capset", // http://man7.org/linux/man-pages/man2/capset.2.html
@@ -133,9 +133,9 @@ var mediumProfile = &securityProfile{
 	},
 	// http://man7.org/linux/man-pages/man2/syscalls.2.html
 	Seccomp: &seccomp.Config{
-		Enable: true,
+		Enable:          true,
 		WhitelistToggle: false,
-		Architectures: []string{},
+		Architectures:   []string{},
 		Syscalls: []*seccomp.BlockedSyscall{
 			{
 				Name: "unshare", // http://man7.org/linux/man-pages/man2/unshare.2.html
@@ -206,9 +206,9 @@ var lowProfile = &securityProfile{
 	},
 	// http://man7.org/linux/man-pages/man2/syscalls.2.html
 	Seccomp: &seccomp.Config{
-		Enable: true,
+		Enable:          true,
 		WhitelistToggle: false,
-		Architectures: []string{},
+		Architectures:   []string{},
 		Syscalls: []*seccomp.BlockedSyscall{
 			{
 				Name: "unshare", // http://man7.org/linux/man-pages/man2/unshare.2.html
