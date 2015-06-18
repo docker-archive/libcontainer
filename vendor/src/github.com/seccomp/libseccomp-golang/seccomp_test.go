@@ -284,7 +284,7 @@ func TestFilterArchFunctions(t *testing.T) {
 	// Remove the arch again, make sure it's not in the filter
 	err = filter.RemoveArch(prospectiveArch)
 	if err != nil {
-		fmt.Errorf("Could not remove arch %s from filter: %s",
+		t.Errorf("Could not remove arch %s from filter: %s",
 			prospectiveArch.String(), err)
 	}
 
