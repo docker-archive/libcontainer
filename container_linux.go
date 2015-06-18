@@ -831,9 +831,18 @@ func orderNamespacePaths(namespaces map[configs.NamespaceType]string) ([]string,
 		configs.NEWNS,
 	} {
 		if p, ok := namespaces[nsType]; ok && p != "" {
+			// check if the requested namespace is supported
+			if !configs.IsNamespaceSupported(nsType) {
+				return nil, newSystemError(fmt.Errorf("namespace %s is not supported", nsType))
+			}
 			// only set to join this namespace if it exists
 			if _, err := os.Lstat(p); err != nil {
 				return nil, newSystemError(err)
+			}
+			// do not allow namespace path with comma as we use it to separate
+			// the namespace paths
+			if strings.ContainsRune(p, ',') {
+				return nil, newSystemError(fmt.Errorf("invalid path %s", p))
 			}
 			paths = append(paths, p)
 		}
