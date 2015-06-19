@@ -46,5 +46,6 @@ clone git github.com/godbus/dbus v2
 clone git github.com/Sirupsen/logrus v0.7.3
 clone git github.com/syndtr/gocapability 66ef2aa
 clone git github.com/golang/protobuf 655cdfa588ea
+clone git github.com/vishvananda/netlink b1aa0245acaf634bf2c907c5850676a6e0aa77d6
 
 # intentionally not vendoring Docker itself...  that'd be a circle :)
