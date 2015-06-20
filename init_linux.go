@@ -5,6 +5,7 @@ package libcontainer
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"syscall"
@@ -12,11 +13,11 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
-	"github.com/docker/libcontainer/netlink"
 	"github.com/docker/libcontainer/seccomp"
 	"github.com/docker/libcontainer/system"
 	"github.com/docker/libcontainer/user"
 	"github.com/docker/libcontainer/utils"
+	"github.com/vishvananda/netlink"
 )
 
 type initType string
@@ -222,7 +223,30 @@ func setupNetwork(config *initConfig) error {
 
 func setupRoute(config *configs.Config) error {
 	for _, config := range config.Routes {
-		if err := netlink.AddRoute(config.Destination, config.Source, config.Gateway, config.InterfaceName); err != nil {
+		_, dst, err := net.ParseCIDR(config.Destination)
+		if err != nil {
+			return err
+		}
+		src := net.ParseIP(config.Source)
+		if src == nil {
+			return fmt.Errorf("Invalid source for route: %s", config.Source)
+		}
+		gw := net.ParseIP(config.Gateway)
+		if gw == nil {
+			return fmt.Errorf("Invalid gateway for route: %s", config.Gateway)
+		}
+		l, err := netlink.LinkByName(config.InterfaceName)
+		if err != nil {
+			return err
+		}
+		route := &netlink.Route{
+			Scope:     netlink.SCOPE_UNIVERSE,
+			Dst:       dst,
+			Src:       src,
+			Gw:        gw,
+			LinkIndex: l.Attrs().Index,
+		}
+		if err := netlink.RouteAdd(route); err != nil {
 			return err
 		}
 	}
