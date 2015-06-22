@@ -63,11 +63,24 @@ static int clone_parent(jmp_buf * env)
 	return child;
 }
 
+// namespacesLength returns the number of additional namespaces to setns. The
+// argument is a comma-separated string of namespace paths.
+static int namespacesLength(char *nspaths)
+{
+	int size = 0, i = 0;
+	for (i = 0; nspaths[i]; i++) {
+		if (nspaths[i] == ',') {
+			size += 1;
+		}
+	}
+	return size + 1;
+}
+
 void nsexec()
 {
 	jmp_buf env;
 	char buf[PATH_MAX], *val, *nspaths;
-	int fd, child, len, pipenum, consolefd = -1;
+	int nsLen, child, len, pipenum, consolefd = -1;
 	char *console;
 
 	// _LIBCONTAINER_NSPATH if exists is a comma-separated list of namespaces
@@ -97,22 +110,48 @@ void nsexec()
 			exit(1);
 		}
 	}
-
+	// open all namespaces' descriptors and perform setns on them
+	nsLen = namespacesLength(nspaths);
+	if (nsLen == 0) {
+		return;
+	}
+	int fds[nsLen];
+	char *nsList[nsLen];
+	int i, j, savedErr = -1;
 	char *ns, *saveptr;
-	while ((ns = strtok_r(nspaths, ",", &saveptr))) {
-		fd = open(ns, O_RDONLY);
-		if (fd == -1) {
-			pr_perror("Failed to open \"%s\"", ns);
+	for (i = 0; i < nsLen; i++) {
+		ns = strtok_r(nspaths, ",", &saveptr);
+		if (ns == NULL) {
+			break;
+		}
+		fds[i] = open(ns, O_RDONLY);
+		if (fds[i] == -1) {
+			savedErr = errno;
+			// failed to open a particular path, we need to close all opened
+			// file descriptors
+			for (j = 0; j < i; j++) {
+				close(fds[j]);
+			}
+			errno = savedErr;
+			pr_perror("Failed to open %s", ns);
 			exit(1);
 		}
-		if (setns(fd, 0) == -1) {
-			pr_perror("Failed to setns to \"%s\"", ns);
-			exit(1);
-		}
-		close(fd);
+		nsList[i] = ns;
 		nspaths = NULL;
 	}
-
+	for (i = 0; i < nsLen; i++) {
+		if (fds[i] != -1 && setns(fds[i], 0) != 0) {
+			savedErr = errno;
+			// failed to setns, we need to close all opended file descriptors
+			for (j = 0; j < nsLen; j++) {
+				close(fds[j]);
+			}
+			errno = savedErr;
+			pr_perror("Failed to setns to %s", nsList[i]);
+			exit(1);
+		}
+		close(fds[i]);
+	}
 	// if we dont need to clone, then just let the Go runtime take over
 	val = getenv("_LIBCONTAINER_DOCLONE");
 	if (val == NULL || strcmp(val, "true") != 0) {
