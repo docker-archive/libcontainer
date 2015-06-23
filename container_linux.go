@@ -821,14 +821,14 @@ func (c *linuxContainer) currentState() (*State, error) {
 func orderNamespacePaths(namespaces map[configs.NamespaceType]string) ([]string, error) {
 	paths := []string{}
 	for _, nsType := range []configs.NamespaceType{
-		// TODO: enable configs.NEWUSER,
 		configs.NEWIPC,
 		configs.NEWUTS,
 		configs.NEWNET,
 		configs.NEWPID,
-		// mnt namespace must be the last one. After switching to mnt
-		// namespace, the old /proc will be inaccessible.
 		configs.NEWNS,
+		// user namespace must be the last one because we need enough privilege
+		// to setns
+		configs.NEWUSER,
 	} {
 		if p, ok := namespaces[nsType]; ok && p != "" {
 			// check if the requested namespace is supported

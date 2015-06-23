@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -872,11 +873,16 @@ func TestInitJoinPID(t *testing.T) {
 	state2, err := container2.State()
 	ok(t, err)
 
-	// check that pidns is the same
-	if state2.NamespacePaths[configs.NEWPID] != state1.NamespacePaths[configs.NEWPID] {
-		t.Errorf("Pidns(%q), wanted %s", state2.NamespacePaths[configs.NEWPID],
-			state1.NamespacePaths[configs.NEWPID])
+	for _, ns := range []string{"pid"} {
+		ns1, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/%s", state1.InitProcessPid, ns))
+		ok(t, err)
+		ns2, err := os.Readlink(fmt.Sprintf("/proc/%d/ns/%s", state2.InitProcessPid, ns))
+		ok(t, err)
+		if ns1 != ns2 {
+			t.Errorf("%s(%s), wanted %s", ns, ns2, ns1)
+		}
 	}
+
 	// check that namespaces are not the same
 	if reflect.DeepEqual(state2.NamespacePaths, state1.NamespacePaths) {
 		t.Errorf("Namespaces(%v), original %v", state2.NamespacePaths,
