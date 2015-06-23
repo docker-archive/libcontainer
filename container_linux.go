@@ -185,7 +185,7 @@ func (c *linuxContainer) newInitProcess(p *Process, cmd *exec.Cmd, parentPipe, c
 		}
 	}
 	if len(nsMaps) > 0 {
-		nsPaths, err := orderNamespacePaths(nsMaps)
+		nsPaths, err := c.orderNamespacePaths(nsMaps, true)
 		if err != nil {
 			return nil, err
 		}
@@ -213,7 +213,7 @@ func (c *linuxContainer) newSetnsProcess(p *Process, cmd *exec.Cmd, parentPipe, 
 	if err != nil {
 		return nil, newSystemError(err)
 	}
-	nsPaths, err := orderNamespacePaths(state.NamespacePaths)
+	nsPaths, err := c.orderNamespacePaths(state.NamespacePaths, false)
 	if err != nil {
 		return nil, newSystemError(err)
 	}
@@ -818,18 +818,21 @@ func (c *linuxContainer) currentState() (*State, error) {
 
 // orderNamespacePaths sorts that namespace paths into a list of paths that we
 // can safely setns to.
-func orderNamespacePaths(namespaces map[configs.NamespaceType]string) ([]string, error) {
+func (c *linuxContainer) orderNamespacePaths(namespaces map[configs.NamespaceType]string, doInit bool) ([]string, error) {
 	paths := []string{}
-	for _, nsType := range []configs.NamespaceType{
+	nsTypes := []configs.NamespaceType{
 		configs.NEWIPC,
 		configs.NEWUTS,
 		configs.NEWNET,
 		configs.NEWPID,
 		configs.NEWNS,
-		// user namespace must be the last one because we need enough privilege
-		// to setns
-		configs.NEWUSER,
-	} {
+	}
+	// For now, only join user namespace if this is an exec in process and the
+	// container supports user namespace
+	if !doInit && c.config.Namespaces.Contains(configs.NEWUSER) {
+		nsTypes = append(nsTypes, configs.NEWUSER)
+	}
+	for _, nsType := range nsTypes {
 		if p, ok := namespaces[nsType]; ok && p != "" {
 			// check if the requested namespace is supported
 			if !configs.IsNamespaceSupported(nsType) {
