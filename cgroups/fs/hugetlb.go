@@ -4,7 +4,6 @@ package fs
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/docker/libcontainer/cgroups"
@@ -29,7 +28,7 @@ func (s *HugetlbGroup) Apply(d *data) error {
 
 func (s *HugetlbGroup) Set(path string, cgroup *configs.Cgroup) error {
 	for _, hugetlb := range cgroup.HugetlbLimit {
-		if err := writeFile(path, strings.Join([]string{"hugetlb", hugetlb.Pagesize, "limit_in_bytes"}, "."), strconv.Itoa(hugetlb.Limit)); err != nil {
+		if err := writeFileInt(path, strings.Join([]string{"hugetlb", hugetlb.Pagesize, "limit_in_bytes"}, "."), hugetlb.Limit); err != nil {
 			return err
 		}
 	}

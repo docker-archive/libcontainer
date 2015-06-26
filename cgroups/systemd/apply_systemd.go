@@ -293,6 +293,10 @@ func writeFile(dir, file, data string) error {
 	return ioutil.WriteFile(filepath.Join(dir, file), []byte(data), 0700)
 }
 
+func writeFileInt(dir, file string, data int64) error {
+	return writeFile(dir, file, strconv.FormatInt(data, 10))
+}
+
 func join(c *configs.Cgroup, subsystem string, pid int) (string, error) {
 	path, err := getSubsystemPath(c, subsystem)
 	if err != nil {
@@ -301,7 +305,7 @@ func join(c *configs.Cgroup, subsystem string, pid int) (string, error) {
 	if err := os.MkdirAll(path, 0755); err != nil && !os.IsExist(err) {
 		return "", err
 	}
-	if err := writeFile(path, "cgroup.procs", strconv.Itoa(pid)); err != nil {
+	if err := writeFileInt(path, "cgroup.procs", int64(pid)); err != nil {
 		return "", err
 	}
 
@@ -314,22 +318,22 @@ func joinCpu(c *configs.Cgroup, pid int) error {
 		return err
 	}
 	if c.CpuQuota != 0 {
-		if err = writeFile(path, "cpu.cfs_quota_us", strconv.FormatInt(c.CpuQuota, 10)); err != nil {
+		if err = writeFileInt(path, "cpu.cfs_quota_us", c.CpuQuota); err != nil {
 			return err
 		}
 	}
 	if c.CpuPeriod != 0 {
-		if err = writeFile(path, "cpu.cfs_period_us", strconv.FormatInt(c.CpuPeriod, 10)); err != nil {
+		if err = writeFileInt(path, "cpu.cfs_period_us", c.CpuPeriod); err != nil {
 			return err
 		}
 	}
 	if c.CpuRtPeriod != 0 {
-		if err = writeFile(path, "cpu.rt_period_us", strconv.FormatInt(c.CpuRtPeriod, 10)); err != nil {
+		if err = writeFileInt(path, "cpu.rt_period_us", c.CpuRtPeriod); err != nil {
 			return err
 		}
 	}
 	if c.CpuRtRuntime != 0 {
-		if err = writeFile(path, "cpu.rt_runtime_us", strconv.FormatInt(c.CpuRtRuntime, 10)); err != nil {
+		if err = writeFileInt(path, "cpu.rt_runtime_us", c.CpuRtRuntime); err != nil {
 			return err
 		}
 	}
@@ -483,7 +487,7 @@ func setKernelMemory(c *configs.Cgroup) error {
 	}
 
 	if c.KernelMemory > 0 {
-		err = writeFile(path, "memory.kmem.limit_in_bytes", strconv.FormatInt(c.KernelMemory, 10))
+		err = writeFileInt(path, "memory.kmem.limit_in_bytes", c.KernelMemory)
 		if err != nil {
 			return err
 		}
@@ -500,14 +504,14 @@ func joinMemory(c *configs.Cgroup, pid int) error {
 
 	// -1 disables memoryswap
 	if c.MemorySwap > 0 {
-		err = writeFile(path, "memory.memsw.limit_in_bytes", strconv.FormatInt(c.MemorySwap, 10))
+		err = writeFileInt(path, "memory.memsw.limit_in_bytes", c.MemorySwap)
 		if err != nil {
 			return err
 		}
 	}
 
 	if c.MemorySwappiness >= 0 && c.MemorySwappiness <= 100 {
-		err = writeFile(path, "memory.swappiness", strconv.FormatInt(c.MemorySwappiness, 10))
+		err = writeFileInt(path, "memory.swappiness", c.MemorySwappiness)
 		if err != nil {
 			return err
 		}

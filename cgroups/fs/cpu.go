@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
@@ -32,27 +31,27 @@ func (s *CpuGroup) Apply(d *data) error {
 
 func (s *CpuGroup) Set(path string, cgroup *configs.Cgroup) error {
 	if cgroup.CpuShares != 0 {
-		if err := writeFile(path, "cpu.shares", strconv.FormatInt(cgroup.CpuShares, 10)); err != nil {
+		if err := writeFileInt(path, "cpu.shares", cgroup.CpuShares); err != nil {
 			return err
 		}
 	}
 	if cgroup.CpuPeriod != 0 {
-		if err := writeFile(path, "cpu.cfs_period_us", strconv.FormatInt(cgroup.CpuPeriod, 10)); err != nil {
+		if err := writeFileInt(path, "cpu.cfs_period_us", cgroup.CpuPeriod); err != nil {
 			return err
 		}
 	}
 	if cgroup.CpuQuota != 0 {
-		if err := writeFile(path, "cpu.cfs_quota_us", strconv.FormatInt(cgroup.CpuQuota, 10)); err != nil {
+		if err := writeFileInt(path, "cpu.cfs_quota_us", cgroup.CpuQuota); err != nil {
 			return err
 		}
 	}
 	if cgroup.CpuRtPeriod != 0 {
-		if err := writeFile(path, "cpu.rt_period_us", strconv.FormatInt(cgroup.CpuRtPeriod, 10)); err != nil {
+		if err := writeFileInt(path, "cpu.rt_period_us", cgroup.CpuRtPeriod); err != nil {
 			return err
 		}
 	}
 	if cgroup.CpuRtRuntime != 0 {
-		if err := writeFile(path, "cpu.rt_runtime_us", strconv.FormatInt(cgroup.CpuRtRuntime, 10)); err != nil {
+		if err := writeFileInt(path, "cpu.rt_runtime_us", cgroup.CpuRtRuntime); err != nil {
 			return err
 		}
 	}
