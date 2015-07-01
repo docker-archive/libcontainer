@@ -22,8 +22,17 @@ const (
 
 func TestParseCgroups(t *testing.T) {
 	r := bytes.NewBuffer([]byte(cgroupsContents))
-	_, err := ParseCgroupFile("blkio", r)
+
+	dir, err := ParseCgroupFile("blkio", r)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if dir != "/" {
+		t.Fatal(err)
+	}
+
+	dir, err = ParseCgroupFile("foo", r)
+	if err == nil {
 		t.Fatal(err)
 	}
 }
