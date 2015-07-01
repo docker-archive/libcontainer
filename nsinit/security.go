@@ -4,7 +4,7 @@ import (
 	"syscall"
 
 	"github.com/docker/libcontainer/configs"
-	"github.com/docker/libcontainer/system"
+	"github.com/docker/libcontainer/security/seccomp"
 )
 
 var profiles = map[string]*securityProfile{
@@ -19,7 +19,7 @@ type securityProfile struct {
 	MountLabel      string           `json:"mount_label"`
 	ProcessLabel    string           `json:"process_label"`
 	Rlimits         []configs.Rlimit `json:"rlimits"`
-	Seccomp         *configs.Seccomp `json:"seccomp"`
+	Seccomp         *seccomp.Config  `json:"seccomp"`
 }
 
 // this should be a runtime config that is not able to do things like apt-get or yum install.
@@ -37,84 +37,70 @@ var highProfile = &securityProfile{
 		},
 	},
 	// http://man7.org/linux/man-pages/man2/syscalls.2.html
-	Seccomp: &configs.Seccomp{
-		Syscalls: []*configs.Syscall{
+	Seccomp: &seccomp.Config{
+		Enable:          true,
+		WhitelistToggle: false,
+		Architectures:   []string{},
+		Syscalls: []*seccomp.BlockedSyscall{
 			{
-				Value:  syscall.SYS_CAPSET, // http://man7.org/linux/man-pages/man2/capset.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "capset", // http://man7.org/linux/man-pages/man2/capset.2.html
 			},
 			{
-				Value:  syscall.SYS_UNSHARE, // http://man7.org/linux/man-pages/man2/unshare.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "unshare", // http://man7.org/linux/man-pages/man2/unshare.2.html
 			},
 			{
-				Value:  int(system.SysSetns()),
-				Action: configs.Action(syscall.EPERM),
+				Name: "setns",
 			},
 			{
-				Value:  syscall.SYS_MOUNT, // http://man7.org/linux/man-pages/man2/mount.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "mount", // http://man7.org/linux/man-pages/man2/mount.2.html
 			},
 			{
-				Value:  syscall.SYS_UMOUNT2, // http://man7.org/linux/man-pages/man2/umount.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "umount2", // http://man7.org/linux/man-pages/man2/umount.2.html
 			},
 			{
-				Value:  syscall.SYS_CREATE_MODULE, // http://man7.org/linux/man-pages/man2/create_module.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "create_module", // http://man7.org/linux/man-pages/man2/create_module.2.html
 			},
 			{
-				Value:  syscall.SYS_DELETE_MODULE, // http://man7.org/linux/man-pages/man2/delete_module.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "delete_module", // http://man7.org/linux/man-pages/man2/delete_module.2.html
 			},
 			{
-				Value:  syscall.SYS_CHMOD, // http://man7.org/linux/man-pages/man2/chmod.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "chmod", // http://man7.org/linux/man-pages/man2/chmod.2.html
 			},
 			{
-				Value:  syscall.SYS_CHOWN, // http://man7.org/linux/man-pages/man2/chown.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "chown", // http://man7.org/linux/man-pages/man2/chown.2.html
 			},
 			{
-				Value:  syscall.SYS_LINK, // http://man7.org/linux/man-pages/man2/link.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "link", // http://man7.org/linux/man-pages/man2/link.2.html
 			},
 			{
-				Value:  syscall.SYS_LINKAT, // http://man7.org/linux/man-pages/man2/linkat.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "linkat", // http://man7.org/linux/man-pages/man2/linkat.2.html
 			},
 			{
-				Value:  syscall.SYS_UNLINK, // http://man7.org/linux/man-pages/man2/unlink.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "unlink", // http://man7.org/linux/man-pages/man2/unlink.2.html
 			},
 			{
-				Value:  syscall.SYS_UNLINKAT, // http://man7.org/linux/man-pages/man2/unlinkat.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "unlinkat", // http://man7.org/linux/man-pages/man2/unlinkat.2.html
 			},
 			{
-				Value:  syscall.SYS_CHROOT, // http://man7.org/linux/man-pages/man2/chroot.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "chroot", // http://man7.org/linux/man-pages/man2/chroot.2.html
 			},
 			{
-				Value:  syscall.SYS_KEXEC_LOAD, // http://man7.org/linux/man-pages/man2/kexec_load.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "kexec_load", // http://man7.org/linux/man-pages/man2/kexec_load.2.html
 			},
 			{
-				Value:  syscall.SYS_SETDOMAINNAME, // http://man7.org/linux/man-pages/man2/setdomainname.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "setdomainname", // http://man7.org/linux/man-pages/man2/setdomainname.2.html
 			},
 			{
-				Value:  syscall.SYS_SETHOSTNAME, // http://man7.org/linux/man-pages/man2/sethostname.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "sethostname", // http://man7.org/linux/man-pages/man2/sethostname.2.html
 			},
 			{
-				Value:  syscall.SYS_CLONE, // http://man7.org/linux/man-pages/man2/clone.2.html
-				Action: configs.Action(syscall.EPERM),
-				Args: []*configs.Arg{
+				Name: "clone",
+				Conditions: []seccomp.SyscallCondition{
 					{
-						Index: 0, // the glibc wrapper has the flags at arg2 but the raw syscall has flags at arg0
-						Value: syscall.CLONE_NEWUSER,
-						Op:    configs.MaskEqualTo,
+						Argument: 0,
+						Operator: "|=",
+						ValueOne: syscall.CLONE_NEWUSER,
+						ValueTwo: syscall.CLONE_NEWUSER,
 					},
 				},
 			},
@@ -146,56 +132,49 @@ var mediumProfile = &securityProfile{
 		},
 	},
 	// http://man7.org/linux/man-pages/man2/syscalls.2.html
-	Seccomp: &configs.Seccomp{
-		Syscalls: []*configs.Syscall{
+	Seccomp: &seccomp.Config{
+		Enable:          true,
+		WhitelistToggle: false,
+		Architectures:   []string{},
+		Syscalls: []*seccomp.BlockedSyscall{
 			{
-				Value:  syscall.SYS_UNSHARE, // http://man7.org/linux/man-pages/man2/unshare.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "unshare", // http://man7.org/linux/man-pages/man2/unshare.2.html
 			},
 			{
-				Value:  int(system.SysSetns()),
-				Action: configs.Action(syscall.EPERM),
+				Name: "setns",
 			},
 			{
-				Value:  syscall.SYS_MOUNT, // http://man7.org/linux/man-pages/man2/mount.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "mount", // http://man7.org/linux/man-pages/man2/mount.2.html
 			},
 			{
-				Value:  syscall.SYS_UMOUNT2, // http://man7.org/linux/man-pages/man2/umount.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "umount2", // http://man7.org/linux/man-pages/man2/umount.2.html
 			},
 			{
-				Value:  syscall.SYS_CHROOT, // http://man7.org/linux/man-pages/man2/chroot.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "chroot", // http://man7.org/linux/man-pages/man2/chroot.2.html
 			},
 			{
-				Value:  syscall.SYS_CREATE_MODULE, // http://man7.org/linux/man-pages/man2/create_module.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "create_module", // http://man7.org/linux/man-pages/man2/create_module.2.html
 			},
 			{
-				Value:  syscall.SYS_DELETE_MODULE, // http://man7.org/linux/man-pages/man2/delete_module.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "delete_module", // http://man7.org/linux/man-pages/man2/delete_module.2.html
 			},
 			{
-				Value:  syscall.SYS_KEXEC_LOAD, // http://man7.org/linux/man-pages/man2/kexec_load.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "kexec_load", // http://man7.org/linux/man-pages/man2/kexec_load.2.html
 			},
 			{
-				Value:  syscall.SYS_SETDOMAINNAME, // http://man7.org/linux/man-pages/man2/setdomainname.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "setdomainname", // http://man7.org/linux/man-pages/man2/setdomainname.2.html
 			},
 			{
-				Value:  syscall.SYS_SETHOSTNAME, // http://man7.org/linux/man-pages/man2/sethostname.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "sethostname", // http://man7.org/linux/man-pages/man2/sethostname.2.html
 			},
 			{
-				Value:  syscall.SYS_CLONE, // http://man7.org/linux/man-pages/man2/clone.2.html
-				Action: configs.Action(syscall.EPERM),
-				Args: []*configs.Arg{
+				Name: "clone",
+				Conditions: []seccomp.SyscallCondition{
 					{
-						Index: 0, // the glibc wrapper has the flags at arg2 but the raw syscall has flags at arg0
-						Value: syscall.CLONE_NEWUSER,
-						Op:    configs.MaskEqualTo,
+						Argument: 0,
+						Operator: "|=",
+						ValueOne: syscall.CLONE_NEWUSER,
+						ValueTwo: syscall.CLONE_NEWUSER,
 					},
 				},
 			},
@@ -226,44 +205,40 @@ var lowProfile = &securityProfile{
 		},
 	},
 	// http://man7.org/linux/man-pages/man2/syscalls.2.html
-	Seccomp: &configs.Seccomp{
-		Syscalls: []*configs.Syscall{
+	Seccomp: &seccomp.Config{
+		Enable:          true,
+		WhitelistToggle: false,
+		Architectures:   []string{},
+		Syscalls: []*seccomp.BlockedSyscall{
 			{
-				Value:  syscall.SYS_UNSHARE, // http://man7.org/linux/man-pages/man2/unshare.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "unshare", // http://man7.org/linux/man-pages/man2/unshare.2.html
 			},
 			{
-				Value:  int(system.SysSetns()),
-				Action: configs.Action(syscall.EPERM),
+				Name: "setns",
 			},
 			{
-				Value:  syscall.SYS_MOUNT, // http://man7.org/linux/man-pages/man2/mount.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "mount", // http://man7.org/linux/man-pages/man2/mount.2.html
 			},
 			{
-				Value:  syscall.SYS_UMOUNT2, // http://man7.org/linux/man-pages/man2/umount.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "umount2", // http://man7.org/linux/man-pages/man2/umount.2.html
 			},
 			{
-				Value:  syscall.SYS_CREATE_MODULE, // http://man7.org/linux/man-pages/man2/create_module.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "create_module", // http://man7.org/linux/man-pages/man2/create_module.2.html
 			},
 			{
-				Value:  syscall.SYS_DELETE_MODULE, // http://man7.org/linux/man-pages/man2/delete_module.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "delete_module", // http://man7.org/linux/man-pages/man2/delete_module.2.html
 			},
 			{
-				Value:  syscall.SYS_KEXEC_LOAD, // http://man7.org/linux/man-pages/man2/kexec_load.2.html
-				Action: configs.Action(syscall.EPERM),
+				Name: "kexec_load", // http://man7.org/linux/man-pages/man2/kexec_load.2.html
 			},
 			{
-				Value:  syscall.SYS_CLONE, // http://man7.org/linux/man-pages/man2/clone.2.html
-				Action: configs.Action(syscall.EPERM),
-				Args: []*configs.Arg{
+				Name: "clone",
+				Conditions: []seccomp.SyscallCondition{
 					{
-						Index: 0, // the glibc wrapper has the flags at arg2 but the raw syscall has flags at arg0
-						Value: syscall.CLONE_NEWUSER,
-						Op:    configs.MaskEqualTo,
+						Argument: 0,
+						Operator: "|=",
+						ValueOne: syscall.CLONE_NEWUSER,
+						ValueTwo: syscall.CLONE_NEWUSER,
 					},
 				},
 			},
