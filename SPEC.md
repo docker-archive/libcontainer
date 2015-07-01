@@ -111,7 +111,7 @@ jailing the process inside the rootfs.
 put_old = mkdir(...);
 pivot_root(rootfs, put_old);
 chdir("/");
-unmount(put_old, MS_DETACH);
+umount(put_old, MNT_DETACH);
 rmdir(put_old);
 ```
 
