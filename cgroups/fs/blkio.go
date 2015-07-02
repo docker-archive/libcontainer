@@ -32,7 +32,7 @@ func (s *BlkioGroup) Apply(d *data) error {
 
 func (s *BlkioGroup) Set(path string, cgroup *configs.Cgroup) error {
 	if cgroup.BlkioWeight != 0 {
-		if err := writeFile(path, "blkio.weight", strconv.FormatInt(cgroup.BlkioWeight, 10)); err != nil {
+		if err := writeFileInt(path, "blkio.weight", cgroup.BlkioWeight); err != nil {
 			return err
 		}
 	}

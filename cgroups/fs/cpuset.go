@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/docker/libcontainer/cgroups"
 	"github.com/docker/libcontainer/configs"
@@ -61,7 +60,7 @@ func (s *CpusetGroup) ApplyDir(dir string, cgroup *configs.Cgroup, pid int) erro
 	}
 	// because we are not using d.join we need to place the pid into the procs file
 	// unlike the other subsystems
-	if err := writeFile(dir, "cgroup.procs", strconv.Itoa(pid)); err != nil {
+	if err := writeFileInt(dir, "cgroup.procs", int64(pid)); err != nil {
 		return err
 	}
 

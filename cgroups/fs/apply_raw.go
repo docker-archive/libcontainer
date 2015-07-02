@@ -271,7 +271,7 @@ func (raw *data) join(subsystem string) (string, error) {
 	if err := os.MkdirAll(path, 0755); err != nil && !os.IsExist(err) {
 		return "", err
 	}
-	if err := writeFile(path, CgroupProcesses, strconv.Itoa(raw.pid)); err != nil {
+	if err := writeFileInt(path, CgroupProcesses, int64(raw.pid)); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -284,6 +284,10 @@ func writeFile(dir, file, data string) error {
 		return fmt.Errorf("no such directory for %s.", file)
 	}
 	return ioutil.WriteFile(filepath.Join(dir, file), []byte(data), 0700)
+}
+
+func writeFileInt(dir, file string, data int64) error {
+	return writeFile(dir, file, strconv.FormatInt(data, 10))
 }
 
 func readFile(dir, file string) (string, error) {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/docker/libcontainer/cgroups"
@@ -46,22 +45,22 @@ func (s *MemoryGroup) Apply(d *data) error {
 
 func (s *MemoryGroup) Set(path string, cgroup *configs.Cgroup) error {
 	if cgroup.Memory != 0 {
-		if err := writeFile(path, "memory.limit_in_bytes", strconv.FormatInt(cgroup.Memory, 10)); err != nil {
+		if err := writeFileInt(path, "memory.limit_in_bytes", cgroup.Memory); err != nil {
 			return err
 		}
 	}
 	if cgroup.MemoryReservation != 0 {
-		if err := writeFile(path, "memory.soft_limit_in_bytes", strconv.FormatInt(cgroup.MemoryReservation, 10)); err != nil {
+		if err := writeFileInt(path, "memory.soft_limit_in_bytes", cgroup.MemoryReservation); err != nil {
 			return err
 		}
 	}
 	if cgroup.MemorySwap > 0 {
-		if err := writeFile(path, "memory.memsw.limit_in_bytes", strconv.FormatInt(cgroup.MemorySwap, 10)); err != nil {
+		if err := writeFileInt(path, "memory.memsw.limit_in_bytes", cgroup.MemorySwap); err != nil {
 			return err
 		}
 	}
 	if cgroup.KernelMemory > 0 {
-		if err := writeFile(path, "memory.kmem.limit_in_bytes", strconv.FormatInt(cgroup.KernelMemory, 10)); err != nil {
+		if err := writeFileInt(path, "memory.kmem.limit_in_bytes", cgroup.KernelMemory); err != nil {
 			return err
 		}
 	}
@@ -72,7 +71,7 @@ func (s *MemoryGroup) Set(path string, cgroup *configs.Cgroup) error {
 		}
 	}
 	if cgroup.MemorySwappiness >= 0 && cgroup.MemorySwappiness <= 100 {
-		if err := writeFile(path, "memory.swappiness", strconv.FormatInt(cgroup.MemorySwappiness, 10)); err != nil {
+		if err := writeFileInt(path, "memory.swappiness", cgroup.MemorySwappiness); err != nil {
 			return err
 		}
 	}
