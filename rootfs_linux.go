@@ -145,7 +145,7 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string) error {
 		if dest, err = symlink.FollowSymlinkInScope(filepath.Join(rootfs, m.Destination), rootfs); err != nil {
 			return err
 		}
-		if err := checkMountDestination(rootfs, dest); err != nil {
+		if err := checkMountDest(rootfs, dest); err != nil {
 			return err
 		}
 		if err := createIfNotExists(dest, stat.IsDir()); err != nil {
@@ -206,22 +206,51 @@ func mountToRootfs(m *configs.Mount, rootfs, mountLabel string) error {
 	return nil
 }
 
-// checkMountDestination checks to ensure that the mount destination is not over the
-// top of /proc or /sys.
+func checkSubdirectory(basepath, targpath string) (bool, error) {
+	path, err := filepath.Rel(basepath, targpath)
+	if err != nil {
+		return false, err
+	}
+	if path == "." || !strings.HasPrefix(path, "..") {
+		return true, nil
+	}
+	return false, nil
+}
+
+func checkMountDestException(rootfs, dest string) bool {
+	exceptionDestinations := []string{
+		"/sys/fs/cgroup",
+	}
+
+	for _, exception := range exceptionDestinations {
+		isSub, _ := checkSubdirectory(filepath.Join(rootfs, exception), dest)
+		if isSub {
+			return true
+		}
+	}
+	return false
+}
+
+// checkMountDest checks to ensure that the mount destination is not over the
+// top of /proc or /sys. But we'll have exceptions for certion reasons.
 // dest is required to be an abs path and have any symlinks resolved before calling this function.
-func checkMountDestination(rootfs, dest string) error {
+func checkMountDest(rootfs, dest string) error {
 	if filepath.Clean(rootfs) == filepath.Clean(dest) {
 		return fmt.Errorf("mounting into / is prohibited")
 	}
 	invalidDestinations := []string{
 		"/proc",
+		"/sys",
 	}
 	for _, invalid := range invalidDestinations {
-		path, err := filepath.Rel(filepath.Join(rootfs, invalid), dest)
+		isSub, err := checkSubdirectory(filepath.Join(rootfs, invalid), dest)
 		if err != nil {
 			return err
 		}
-		if path == "." || !strings.HasPrefix(path, "..") {
+		if isSub {
+			if checkMountDestException(rootfs, dest) {
+				continue
+			}
 			return fmt.Errorf("%q cannot be mounted because it is located inside %q", dest, invalid)
 		}
 	}
