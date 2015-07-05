@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -112,6 +113,12 @@ func finalizeNamespace(config *initConfig) error {
 	if err != nil {
 		return err
 	}
+
+	// inject /etc/passwd until we have sufficient privs to do that
+	if err := injectUserPasswd(config); err != nil {
+		return err
+	}
+
 	// drop capabilities in bounding set before changing user
 	if err := w.dropBoundingSet(); err != nil {
 		return err
@@ -135,6 +142,66 @@ func finalizeNamespace(config *initConfig) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func injectUserPasswd(config *initConfig) error {
+	if config.User == "" {
+		return nil
+	}
+
+	var (
+		suid, sgid string
+		uid        int
+	)
+
+	parts := strings.Split(config.User, ":")
+	switch len(parts) {
+	/* UID alone */
+	case 1:
+		if numid, err := strconv.Atoi(config.User); err != nil {
+			return nil
+		} else {
+			uid = numid
+		}
+		suid = config.User
+		sgid = suid
+		break
+	case 2:
+		if _, err := strconv.Atoi(parts[0]); err != nil {
+			return nil
+		}
+		suid = parts[0]
+		sgid = suid
+
+		if _, err := strconv.Atoi(parts[1]); err == nil {
+			sgid = parts[1]
+		}
+
+	default:
+		return nil
+	}
+
+	if pf, err := user.GetPasswd(); err == nil {
+		defer pf.Close()
+
+		found, err := user.ParsePasswdFilter(pf, func(u user.User) bool {
+			return u.Name == "DockerUser" || u.Uid == uid
+		})
+
+		if err != nil {
+			return err
+		}
+
+		if len(found) == 0 {
+			/* No DockerUser in /etc/passwd - define one */
+			if fp, err := os.OpenFile("/etc/passwd", os.O_WRONLY|os.O_APPEND, os.FileMode(0666)); err == nil {
+				fp.WriteString(fmt.Sprintf("%s:x:%s:%s:Docker Mapped User:/:/sbin/nologin\n", "DockerUser", suid, sgid))
+				fp.Close()
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -203,6 +270,7 @@ func setupUser(config *initConfig) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
