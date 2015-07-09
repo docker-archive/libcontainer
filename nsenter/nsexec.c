@@ -63,40 +63,45 @@ static int clone_parent(jmp_buf * env)
 	return child;
 }
 
+// namespacesLength returns the number of additional namespaces to setns. The
+// argument is a comma-separated string of namespace paths.
+static int namespacesLength(char *nspaths)
+{
+	int size = 0, i = 0;
+	for (i = 0; nspaths[i]; i++) {
+		if (nspaths[i] == ',') {
+			size += 1;
+		}
+	}
+	return size + 1;
+}
+
 void nsexec()
 {
-	char *namespaces[] = { "ipc", "uts", "net", "pid", "mnt" };
-	const int num = sizeof(namespaces) / sizeof(char *);
 	jmp_buf env;
-	char buf[PATH_MAX], *val;
-	int i, tfd, child, len, pipenum, consolefd = -1;
-	pid_t pid;
+	char buf[PATH_MAX], *val, *nspaths;
+	int nsLen, child, len, pipenum, consolefd = -1;
 	char *console;
 
-	val = getenv("_LIBCONTAINER_INITPID");
-	if (val == NULL)
+	// _LIBCONTAINER_NSPATH if exists is a comma-separated list of namespaces
+	// paths that the process should join.
+	nspaths = getenv("_LIBCONTAINER_NSPATH");
+	if (nspaths == NULL) {
 		return;
-
-	pid = atoi(val);
-	snprintf(buf, sizeof(buf), "%d", pid);
-	if (strcmp(val, buf)) {
-		pr_perror("Unable to parse _LIBCONTAINER_INITPID");
-		exit(1);
 	}
-
+	// get the init pipe to communicate with parent
 	val = getenv("_LIBCONTAINER_INITPIPE");
 	if (val == NULL) {
 		pr_perror("Child pipe not found");
 		exit(1);
 	}
-
 	pipenum = atoi(val);
 	snprintf(buf, sizeof(buf), "%d", pipenum);
 	if (strcmp(val, buf)) {
 		pr_perror("Unable to parse _LIBCONTAINER_INITPIPE");
 		exit(1);
 	}
-
+	// get the console path before setns because it may change mnt namespace
 	console = getenv("_LIBCONTAINER_CONSOLE_PATH");
 	if (console != NULL) {
 		consolefd = open(console, O_RDWR);
@@ -105,47 +110,64 @@ void nsexec()
 			exit(1);
 		}
 	}
-
-	/* Check that the specified process exists */
-	snprintf(buf, PATH_MAX - 1, "/proc/%d/ns", pid);
-	tfd = open(buf, O_DIRECTORY | O_RDONLY);
-	if (tfd == -1) {
-		pr_perror("Failed to open \"%s\"", buf);
-		exit(1);
+	// open all namespaces' descriptors and perform setns on them
+	nsLen = namespacesLength(nspaths);
+	if (nsLen == 0) {
+		return;
 	}
-
-	for (i = 0; i < num; i++) {
-		struct stat st;
-		int fd;
-
-		/* Symlinks on all namespaces exist for dead processes, but they can't be opened */
-		if (fstatat(tfd, namespaces[i], &st, AT_SYMLINK_NOFOLLOW) == -1) {
-			// Ignore nonexistent namespaces.
-			if (errno == ENOENT)
-				continue;
+	int fds[nsLen];
+	char *nsList[nsLen];
+	int i, j, savedErr = -1;
+	char *ns, *saveptr;
+	for (i = 0; i < nsLen; i++) {
+		ns = strtok_r(nspaths, ",", &saveptr);
+		if (ns == NULL) {
+			break;
 		}
-
-		fd = openat(tfd, namespaces[i], O_RDONLY);
-		if (fd == -1) {
-			pr_perror("Failed to open ns file %s for ns %s", buf,
-				  namespaces[i]);
+		fds[i] = open(ns, O_RDONLY);
+		if (fds[i] == -1) {
+			savedErr = errno;
+			// failed to open a particular path, we need to close all opened
+			// file descriptors
+			for (j = 0; j < i; j++) {
+				close(fds[j]);
+			}
+			errno = savedErr;
+			pr_perror("Failed to open %s", ns);
 			exit(1);
 		}
-		// Set the namespace.
-		if (setns(fd, 0) == -1) {
-			pr_perror("Failed to setns for %s", namespaces[i]);
+		nsList[i] = ns;
+		nspaths = NULL;
+	}
+	for (i = 0; i < nsLen; i++) {
+		if (fds[i] != -1 && setns(fds[i], 0) != 0) {
+			savedErr = errno;
+			// failed to setns, we need to close all opended file descriptors
+			for (j = 0; j < nsLen; j++) {
+				close(fds[j]);
+			}
+			errno = savedErr;
+			pr_perror("Failed to setns to %s", nsList[i]);
 			exit(1);
 		}
-		close(fd);
+		close(fds[i]);
+	}
+	// if we dont need to clone, then just let the Go runtime take over
+	val = getenv("_LIBCONTAINER_DOCLONE");
+	if (val == NULL || strcmp(val, "true") != 0) {
+		return;
 	}
 
 	if (setjmp(env) == 1) {
 		// Child
-
-		if (setsid() == -1) {
-			pr_perror("setsid failed");
-			exit(1);
+		val = getenv("_LIBCONTAINER_SETSID");
+		if (val != NULL && strcmp(val, "true") == 0) {
+			if (setsid() == -1) {
+				pr_perror("setsid failed");
+				exit(1);
+			}
 		}
+
 		if (consolefd != -1) {
 			if (ioctl(consolefd, TIOCSCTTY, 0) == -1) {
 				pr_perror("ioctl TIOCSCTTY failed");

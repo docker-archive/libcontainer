@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/docker/libcontainer/cgroups"
+	"github.com/docker/libcontainer/configs"
 	"github.com/docker/libcontainer/system"
 )
 
@@ -165,6 +166,11 @@ type initProcess struct {
 	manager    cgroups.Manager
 	container  *linuxContainer
 	fds        []string
+
+	// joinNamespaces are additional namespaces that the init process will join
+	// instead of creating new ones
+	joinNamespaces configs.Namespaces
+	doClone        bool
 }
 
 func (p *initProcess) pid() int {
@@ -175,12 +181,46 @@ func (p *initProcess) externalDescriptors() []string {
 	return p.fds
 }
 
+// execSetns runs the process that executes C code to perform the setns calls
+// because setns support requires the C process to fork off a child and perform the setns
+// before the go runtime boots, we wait on the process to die and receive the child's pid
+// over the provided pipe.
+// This is called by initProcess.start function
+func (p *initProcess) execSetns() error {
+	status, err := p.cmd.Process.Wait()
+	if err != nil {
+		p.cmd.Wait()
+		return err
+	}
+	if !status.Success() {
+		p.cmd.Wait()
+		return &exec.ExitError{ProcessState: status}
+	}
+	var pid *pid
+	if err := json.NewDecoder(p.parentPipe).Decode(&pid); err != nil {
+		p.cmd.Wait()
+		return err
+	}
+	process, err := os.FindProcess(pid.Pid)
+	if err != nil {
+		return err
+	}
+	p.cmd.Process = process
+	return nil
+}
+
 func (p *initProcess) start() error {
 	defer p.parentPipe.Close()
 	err := p.cmd.Start()
 	p.childPipe.Close()
 	if err != nil {
 		return newSystemError(err)
+	}
+	// if we need to clone a new child process
+	if len(p.joinNamespaces) > 0 && p.doClone {
+		if err := p.execSetns(); err != nil {
+			return newSystemError(err)
+		}
 	}
 	// Save the standard descriptor names before the container process
 	// can potentially move them (e.g., via dup2()).  If we don't do this now,
