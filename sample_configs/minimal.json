@@ -6,6 +6,14 @@
 	"readonlyfs": false,
 	"mounts": [
 		{
+			"source": "proc",
+			"destination": "/proc",
+			"device": "proc",
+			"flags": 14,
+			"data": "",
+			"relabel": ""
+		},
+		{
 			"source": "shm",
 			"destination": "/dev/shm",
 			"device": "tmpfs",
