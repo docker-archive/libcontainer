@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/mount"
-	"github.com/docker/docker/pkg/units"
+	"github.com/docker/go-units"
 )
 
 // https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt
