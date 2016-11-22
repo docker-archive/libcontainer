@@ -403,7 +403,7 @@ func nonZeroTerminated(s string) []byte {
 // This is identical to running: ip link add $name type $linkType
 func NetworkLinkAdd(name string, linkType string) error {
 	if name == "" || linkType == "" {
-		return fmt.Errorf("Neither link name nor link type can be empty!")
+		return fmt.Errorf("neither link name nor link type can be empty")
 	}
 
 	s, err := getNetlinkSocket()
@@ -435,7 +435,7 @@ func NetworkLinkAdd(name string, linkType string) error {
 // This is identical to running: ip link del $name
 func NetworkLinkDel(name string) error {
 	if name == "" {
-		return fmt.Errorf("Network link name can not be empty!")
+		return fmt.Errorf("network link name can not be empty")
 	}
 
 	s, err := getNetlinkSocket()
