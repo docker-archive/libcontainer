@@ -766,7 +766,12 @@ func (c *linuxContainer) currentState() (*State, error) {
 		NamespacePaths:       make(map[configs.NamespaceType]string),
 		ExternalDescriptors:  c.initProcess.externalDescriptors(),
 	}
-	for _, ns := range c.config.Namespaces {
+	for _, ns := range []configs.Namespace{
+		{Type: "NEWNS"},
+		{Type: "NEWUTS"},
+		{Type: "NEWIPC"},
+		{Type: "NEWPID"},
+		{Type: "NEWNET"}} {
 		state.NamespacePaths[ns.Type] = ns.GetPath(c.initProcess.pid())
 	}
 	for _, nsType := range configs.NamespaceTypes() {
