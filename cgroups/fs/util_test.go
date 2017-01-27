@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/docker/libcontainer/configs"
+	"github.com/docker/libcontainer/cgroups"
 )
 
 type cgroupTestUtil struct {
@@ -33,7 +34,11 @@ func NewCgroupTestUtil(subsystem string, t *testing.T) *cgroupTestUtil {
 	d := &data{
 		c: &configs.Cgroup{},
 	}
-	tempDir, err := ioutil.TempDir("", "cgroup_test")
+	subRoot, err := cgroups.FindCgroupMountpoint(subsystem)
+	if err != nil {
+		t.Skip("%s is no supported: %s", subRoot, err)
+	}
+	tempDir, err := ioutil.TempDir(subRoot, "cgroup_test")
 	if err != nil {
 		t.Fatal(err)
 	}
