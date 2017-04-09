@@ -63,6 +63,18 @@ func (s *BlkioGroup) Set(path string, cgroup *configs.Cgroup) error {
 		}
 	}
 
+	if cgroup.BlkioReadBpsDevice != "" {
+		if err := writeFile(path, "blkio.throttle.read_bps_device", cgroup.BlkioReadBpsDevice); err != nil {
+			return err
+		}
+	}
+
+	if cgroup.BlkioWriteBpsDevice != "" {
+		if err := writeFile(path, "blkio.throttle.write_bps_device", cgroup.BlkioWriteBpsDevice); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

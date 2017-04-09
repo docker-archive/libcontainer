@@ -564,6 +564,20 @@ func joinBlkio(c *configs.Cgroup, pid int) error {
 		}
 	}
 
+	// `BlockIOReadBandwidth` and `BlockIOWriteBandwidth` property does not
+	// work properly either, use this work around for now.
+	if c.BlkioReadBpsDevice != "" {
+		if err := writeFile(path, "blkio.throttle.read_bps_device", c.BlkioReadBpsDevice); err != nil {
+			return err
+		}
+	}
+
+	if c.BlkioWriteBpsDevice != "" {
+		if err := writeFile(path, "blkio.throttle.write_bps_device", c.BlkioWriteBpsDevice); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
