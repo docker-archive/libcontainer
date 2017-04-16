@@ -205,12 +205,12 @@ func newRtAttrChild(parent *RtAttr, attrType int, data []byte) *RtAttr {
 
 func (a *RtAttr) Len() int {
 	if len(a.children) == 0 {
-		return (syscall.SizeofRtAttr + len(a.Data))
+		return rtaAlignOf(syscall.SizeofRtAttr + len(a.Data))
 	}
 
 	l := 0
 	for _, child := range a.children {
-		l += child.Len()
+		l += rtaAlignOf(child.Len())
 	}
 	l += syscall.SizeofRtAttr
 	return rtaAlignOf(l + len(a.Data))
